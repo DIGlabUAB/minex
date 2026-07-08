@@ -16,7 +16,7 @@ Useful links:
 
 }
 \author{
-\strong{Maintainer}: Sandeep Bodduluri \email{sbodduluri@uabmc.edu} [copyright holder]
+\strong{Maintainer}: Sandeep Bodduluri \email{sbodduluri@uabmc.edu} (\href{https://orcid.org/0000-0001-8201-5262}{ORCID}) [copyright holder]
 
 }
 \keyword{internal}
