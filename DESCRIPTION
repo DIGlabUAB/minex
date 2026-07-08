@@ -1,0 +1,32 @@
+Package: minex
+Title: Automatically Reduce Failing R Scripts to a Minimal Reproducible Example
+Version: 0.1.0
+Authors@R:
+    person("Sandeep", "Bodduluri", , "sbodduluri@uabmc.edu",
+           role = c("aut", "cre", "cph"))
+Description: Shrinks a failing R script to the smallest subset of statements
+    that still triggers the same error, using the delta debugging algorithm of
+    Zeller and Hildebrandt (2002) <doi:10.1109/32.988498>. Each candidate
+    reduction is evaluated in a separate R process, so dependencies between
+    statements and their side effects are respected. The result is a
+    one-minimal example, in which removing any remaining statement makes the
+    error disappear; this is the form most useful for bug reports and for
+    questions on community forums. A general delta debugging routine and a
+    helper for reducing data frames to the rows that reproduce a failure are
+    also provided.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.1
+Imports:
+    callr
+Suggests:
+    knitr,
+    rmarkdown,
+    spelling,
+    testthat (>= 3.0.0)
+VignetteBuilder: knitr
+Config/testthat/edition: 3
+Language: en-US
+URL: https://github.com/DIGlabUAB/minex
+BugReports: https://github.com/DIGlabUAB/minex/issues

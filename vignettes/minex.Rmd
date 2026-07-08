@@ -1,0 +1,137 @@
+---
+title: "Minimizing failing R code with minex"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Minimizing failing R code with minex}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+library(minex)
+```
+
+## The gap minex fills
+
+When you ask for help with an R problem, the standard advice is to post a
+*minimal reproducible example*. The
+[reprex](https://cran.r-project.org/package=reprex) package handles the
+*reproducible* half: it runs your snippet in a clean session and formats the
+code together with its output. It does nothing about the *minimal* half. That
+part, stripping a script down to the few lines that actually matter, is still
+done by hand, and it is the tedious step.
+
+`minex()` automates it. Give it failing code and it returns the smallest subset
+of statements that still produces the same error.
+
+## A first example
+
+Here is a script where only the last line is to blame, surrounded by setup that
+has nothing to do with the failure.
+
+```{r}
+script <- c(
+  "a <- 10",
+  "b <- 20",
+  "log('not a number')"
+)
+
+res <- minex(code = script, backend = "inprocess")
+res
+```
+
+The setup lines are gone. `as.character()` gives you the bare code, ready to
+paste into a bug report.
+
+```{r}
+cat(as.character(res), "\n")
+```
+
+(The examples here use `backend = "inprocess"` so that they run quickly inside
+the vignette. In normal use the default `backend = "callr"` evaluates each
+candidate in a fresh R process, which is what you want when statements have side
+effects.)
+
+## Dependencies are respected
+
+Reduction never throws away a statement the failure depends on. When a later
+line needs an earlier one, removing the earlier line changes the error, and the
+oracle rejects that reduction. Both lines below survive because they are jointly
+required.
+
+```{r}
+script <- c(
+  "x <- c(1, 2, NA)",
+  "m <- mean(x)",
+  "if (is.na(m)) stop('mean is NA')"
+)
+minex(code = script, backend = "inprocess")
+```
+
+## What counts as "the same failure"
+
+By default a candidate must fail with the *same condition message* as the
+original. This is usually the right choice: an over-reduced fragment tends to
+fail differently (often "object not found"), and message matching rejects it.
+
+If the message embeds changing details such as a value or an index, match on the
+condition *class* instead:
+
+```{r}
+minex(code = script, match = "class", backend = "inprocess")
+```
+
+Use `match = "both"` to require the message and a shared class.
+
+## Minimizing against an arbitrary condition
+
+For full control, pass an `oracle`: a predicate over the statements that returns
+`TRUE` when they still reproduce whatever you care about. With a custom oracle,
+`minex()` does not record a target failure and `match` is ignored.
+
+```{r}
+minex(
+  code = c("one <- 1", "two <- 2", "three <- 3"),
+  oracle = function(stmts) any(grepl("two", stmts)),
+  backend = "inprocess"
+)
+```
+
+## Reducing the data, not just the code
+
+A bug often hides in a large data frame even though a couple of rows are enough
+to trigger it. `reduce_rows()` runs the same search over rows.
+
+```{r}
+df <- data.frame(id = 1:6, value = c(3, 8, 999, 2, 5, 7))
+reduce_rows(df, function(d) any(d$value > 100))
+```
+
+The result is usually small enough to capture with `dput()`.
+
+## The algorithm
+
+Both `minex()` and `reduce_rows()` are front ends to `ddmin()`, an
+implementation of the delta debugging algorithm of Zeller and Hildebrandt
+(2002). `ddmin()` works on any collection plus a predicate, so it is reusable on
+its own.
+
+```{r}
+ddmin(strsplit("the quick brown fox", " ")[[1]], function(s) "fox" %in% s)
+```
+
+It partitions the candidate into blocks, keeps the smallest block (or
+complement) that still reproduces the behavior, and increases the granularity
+until every remaining element is load-bearing. The output is *one-minimal*:
+removing any single element makes the behavior disappear.
+
+## Limitations
+
+`minex()` targets R-level conditions (errors). Failures that crash the R process
+or hang are not captured as conditions; with the `callr` backend they are simply
+treated as not reproducing the target. Reduction granularity is the top-level
+statement, so it will not reach inside a single large expression.

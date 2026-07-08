@@ -1,0 +1,77 @@
+
+<!-- README.md is generated from README.Rmd. Please edit that file. -->
+
+# minex
+
+<!-- badges: start -->
+
+[![Lifecycle:
+experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
+[![R-CMD-check](https://github.com/DIGlabUAB/minex/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/DIGlabUAB/minex/actions/workflows/R-CMD-check.yaml)
+<!-- badges: end -->
+
+`reprex` makes your bug **reproducible**. `minex` makes it **minimal**.
+
+When you ask for help with R, you are told to post a minimal
+reproducible example. The `reprex` package runs and formats your code;
+it does not shrink it. `minex` shrinks it: paste in a failing script and
+it returns the smallest subset of statements that still throws the same
+error, finding it by delta debugging rather than by deleting lines and
+re-running by hand.
+
+## Installation
+
+``` r
+# install.packages("pak")
+pak::pak("DIGlabUAB/minex")
+```
+
+## Usage
+
+``` r
+library(minex)
+
+script <- c(
+  "a <- 10",
+  "b <- 20",
+  "log('not a number')"
+)
+
+minex(code = script)
+#> <minex_result> 3 statement(s) reduced to 1 (3 oracle call(s))
+#> target failure: non-numeric argument to mathematical function
+#> ------------------------------------------------
+#> log('not a number')
+```
+
+The setup lines are dropped and only the offending statement remains. A
+statement that the failure genuinely depends on is kept, because
+removing it changes the error and the reduction is rejected.
+
+`minex()` also reads a file directly:
+
+``` r
+minex(file = "analysis.R")
+```
+
+And `reduce_rows()` does the same job for a data frame, returning the
+rows that still reproduce a failure:
+
+``` r
+df <- data.frame(id = 1:6, value = c(3, 8, 999, 2, 5, 7))
+reduce_rows(df, function(d) any(d$value > 100))
+#>   id value
+#> 3  3   999
+```
+
+## How it works
+
+Each candidate reduction runs in a fresh R process (via `callr`) so that
+statement dependencies and side effects are respected. A candidate
+“reproduces” the failure when it errors with the same message as the
+original; matching on the condition class instead, or supplying a custom
+oracle, is also supported. The engine is `ddmin()`, an implementation of
+the delta debugging algorithm of Zeller and Hildebrandt (2002), exposed
+for reuse on any collection.
+
+See `vignette("minex")` for the full walkthrough.
