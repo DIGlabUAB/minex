@@ -2,20 +2,18 @@
 
 0 errors | 0 warnings | 1 note
 
-The single NOTE is the standard "New submission" flag; this is a first
-submission of a new package.
+* This is a new submission, so R CMD check reports one NOTE flagging it as a
+  new submission. There are no other notes.
 
 ## Test environments
 
-* local macOS, R 4.4.2 (`R CMD check --as-cran`)
-
-Before submitting, also check on:
-
-* win-builder (devel and release) via `devtools::check_win_devel()`
-* macOS builder via `devtools::check_mac_release()`
-* R-hub via the `rhub` GitHub Action
+* local macOS, R 4.4.2 -- `R CMD check --as-cran`: OK
+* win-builder, R-devel (2026-07-07 r90210) -- 1 NOTE (new submission)
+* GitHub Actions -- `R CMD check` passing on:
+  * Windows (release)
+  * macOS (release)
+  * Ubuntu (devel, release, oldrel-1)
 
 ## Notes
 
 This is a new submission.
-</content>
