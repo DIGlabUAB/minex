@@ -9,11 +9,18 @@ pt_data <- function(text) {
   pd
 }
 
+#' Named vector mapping each parse-data row id to its parent id.
+#' @keywords internal
+#' @noRd
+pt_parent_map <- function(pd) {
+  stats::setNames(pd$parent, pd$id)
+}
+
 #' Depth of each parse-data row (root tokens = 0), by walking `parent` ids.
 #' @keywords internal
 #' @noRd
 pt_depth <- function(pd) {
-  id_to_parent <- stats::setNames(pd$parent, pd$id)
+  id_to_parent <- pt_parent_map(pd)
   vapply(pd$id, function(id) {
     depth <- 0L
     p <- id_to_parent[[as.character(id)]]
@@ -67,10 +74,9 @@ pt_pipe_stages <- function(text) {
   chains <- list()
   # Group operators sharing a spine by climbing parents until the parent is not
   # a pipe expr; use that ancestor id as the chain key.
-  parent_of <- stats::setNames(pd$parent, pd$id)
+  parent_of <- pt_parent_map(pd)
   is_pipe_expr <- function(expr_id) {
-    kids <- pd$id[pd$parent == expr_id]
-    any(pt_is_pipe_row(pd[pd$id %in% kids, , drop = FALSE]))
+    any(pt_is_pipe_row(pd) & pd$parent == expr_id)
   }
   chain_key <- function(op_row) {
     id <- pd$parent[op_row]

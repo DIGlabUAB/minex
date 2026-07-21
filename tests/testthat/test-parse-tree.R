@@ -54,3 +54,34 @@ test_that("pt_pipe_stages offsets round-trip: deleting a reducible span reparses
   expect_silent(parsed3 <- parse(text = after_removing_stage3, keep.source = FALSE))
   expect_equal(deparse(parsed3[[1]]), deparse(parse(text = "x |> rev()")[[1]]))
 })
+
+test_that("pt_pipe_stages offsets round-trip on a 3-operator chain (multi-level chain_key climb)", {
+  # A 3-operator chain forces chain_key's `repeat` loop to climb multiple
+  # ancestor levels through is_pipe_expr before finding the chain root.
+  text <- "a |> b() |> c() |> d()"
+  st <- pt_pipe_stages(text)[[1]]
+  expect_equal(length(st), 4L)                # a, b(), c(), d()
+  expect_false(st[[1]]$reducible)              # data source a
+  expect_true(st[[2]]$reducible)
+  expect_true(st[[3]]$reducible)
+  expect_true(st[[4]]$reducible)
+
+  delete_span <- function(text, span) {
+    paste0(substr(text, 1, span$from - 1L), substr(text, span$to + 1L, nchar(text)))
+  }
+
+  # Removing stage 2 ("|> b()") should leave something equivalent to d(c(a))
+  after_removing_stage2 <- delete_span(text, st[[2]])
+  expect_silent(parsed2 <- parse(text = after_removing_stage2, keep.source = FALSE))
+  expect_equal(deparse(parsed2[[1]]), deparse(parse(text = "d(c(a))")[[1]]))
+
+  # Removing stage 3 ("|> c()") should leave something equivalent to d(b(a))
+  after_removing_stage3 <- delete_span(text, st[[3]])
+  expect_silent(parsed3 <- parse(text = after_removing_stage3, keep.source = FALSE))
+  expect_equal(deparse(parsed3[[1]]), deparse(parse(text = "d(b(a))")[[1]]))
+
+  # Removing stage 4 ("|> d()") should leave something equivalent to c(b(a))
+  after_removing_stage4 <- delete_span(text, st[[4]])
+  expect_silent(parsed4 <- parse(text = after_removing_stage4, keep.source = FALSE))
+  expect_equal(deparse(parsed4[[1]]), deparse(parse(text = "c(b(a))")[[1]]))
+})
