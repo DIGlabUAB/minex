@@ -150,3 +150,27 @@ test_that("minex accepts a function for `match` (custom condition matching)", {
   expect_equal(res$n_minimal, 1L)
   expect_match(as.character(res), "not found")
 })
+
+test_that("granularity='expression' reduces inside a pipeline", {
+  script <- c("x <- 1:10",
+              "result <- x |> rev() |> sqrt() |> log('oops not a base')")
+  res <- minex(code = script, granularity = "expression", backend = "inprocess")
+  expect_s3_class(res, "minex_result")
+  expect_true(grepl("log", as.character(res), fixed = TRUE))
+  expect_false(grepl("rev(", as.character(res), fixed = TRUE))
+})
+
+test_that("granularity='statement' (default) is unchanged from 0.2.0", {
+  script <- c("a <- 1", "b <- 2", "log('not a number')")
+  res <- minex(code = script, backend = "inprocess")
+  expect_equal(res$n_minimal, 1L)
+  expect_match(as.character(res), "log")
+})
+
+test_that("minex_result keeps n_minimal integer and code a per-statement vector", {
+  script <- c("x <- 1:3", "result <- x |> rev() |> log('oops')")
+  res <- minex(code = script, granularity = "expression", backend = "inprocess")
+  expect_type(res$n_minimal, "integer")
+  expect_equal(res$n_minimal, length(res$code))
+  expect_type(res$n_chars_minimal, "integer")
+})

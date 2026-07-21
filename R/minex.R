@@ -60,6 +60,12 @@
 #'   evaluations, passed to [ddmin()]. When the budget is exhausted the reduction
 #'   stops early with a warning; the result still reproduces the failure but may
 #'   not be one-minimal.
+#' @param granularity `"statement"` (the default) reduces only at the level of
+#'   top-level statements, matching 0.2.0 behavior exactly. `"expression"`
+#'   additionally reduces *within* each surviving statement via HDD (hierarchical
+#'   delta debugging): pipeline stages (`|>`, magrittr `%>%`) and positional call
+#'   arguments can be dropped from a statement as long as the whole kept set
+#'   still reproduces the target failure.
 #' @param verbose Logical. If `TRUE`, report progress.
 #'
 #' @return An object of class `"minex_result"`: a list with the minimized `code`
@@ -110,11 +116,13 @@ minex <- function(file = NULL,
                   backend = c("callr", "inprocess"),
                   timeout = 60,
                   max_oracle_calls = Inf,
-                  verbose = FALSE) {
+                  verbose = FALSE,
+                  granularity = c("statement", "expression")) {
   condition <- match.arg(condition)
   if (!is.function(match)) match <- match.arg(match)
   algorithm <- match.arg(algorithm)
   backend   <- match.arg(backend)
+  granularity <- match.arg(granularity)
 
   # Input precedence: code > clipboard > file; warn on multi-source.
   sources <- c(code = !is.null(code), clipboard = isTRUE(clipboard),
@@ -178,19 +186,46 @@ minex <- function(file = NULL,
                    algorithm = algorithm, max_oracle_calls = max_oracle_calls,
                    verbose = verbose, .info = info)
 
-  if (!isTRUE(info$complete)) {
+  code_out <- minimal
+  running  <- info$oracle_calls %||% 0L      # shared counter (stmt-level + HDD)
+  complete <- isTRUE(info$complete)
+  if (granularity == "expression") {
+    for (i in seq_along(minimal)) {
+      # reproduce(cand_text): replace statement i with the candidate, run the
+      # whole kept set through the existing oracle (run_code + matcher).
+      reproduces <- local({
+        idx_i <- i
+        function(cand_text) {
+          cand_set <- minimal
+          cand_set[idx_i] <- cand_text
+          isTRUE(oracle(cand_set))
+        }
+      })
+      hoc <- hdd_make_oracle(reproduces)     # source-string memo (Task 6)
+      sub <- new.env()
+      remaining <- if (is.finite(max_oracle_calls)) max_oracle_calls - running else Inf
+      if (is.finite(remaining) && remaining < 1) { complete <- FALSE; break }
+      code_out[i] <- hdd_star(minimal[i], hoc, max_oracle_calls = remaining, info = sub)
+      running <- running + (sub$oracle_calls %||% 0L)
+      if (!isTRUE(sub$complete)) complete <- FALSE
+    }
+  }
+
+  if (!complete) {
     warning("minex stopped early; result reproduces the failure but may still ",
             "be reducible. Re-run with a higher `max_oracle_calls`.",
             call. = FALSE)
   }
 
   structure(
-    list(code = minimal, original = statements_full,
-         n_original = length(statements_full), n_minimal = length(minimal),
-         oracle_calls = info$oracle_calls, target = target, match = match,
-         backend = backend, complete = info$complete, algorithm = algorithm,
+    list(code = code_out, original = statements_full,
+         n_original = length(statements_full), n_minimal = length(code_out),
+         oracle_calls = running, target = target, match = match,
+         backend = backend, complete = complete, algorithm = algorithm,
          condition = condition, max_oracle_calls = max_oracle_calls,
-         trace = info$trace),
+         trace = info$trace, granularity = granularity,
+         n_chars_original = nchar(paste(statements_full, collapse = "\n")),
+         n_chars_minimal = nchar(paste(code_out, collapse = "\n"))),
     class = "minex_result"
   )
 }
