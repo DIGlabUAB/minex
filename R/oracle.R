@@ -1,16 +1,5 @@
 #' @keywords internal
 #' @noRd
-condition_summary <- function(cond, type, stmt_index) {
-  list(
-    type       = type,
-    message    = sub("\n$", "", conditionMessage(cond)),
-    classes    = setdiff(class(cond), "condition"),
-    stmt_index = as.integer(stmt_index)
-  )
-}
-
-#' @keywords internal
-#' @noRd
 run_code <- function(code, backend = c("callr", "inprocess"), timeout = 60) {
   backend <- match.arg(backend)
   statements <- code
@@ -23,7 +12,12 @@ run_code <- function(code, backend = c("callr", "inprocess"), timeout = 60) {
 
     record <- function(cond, type) {
       conditions[[length(conditions) + 1L]] <<-
-        condition_summary(cond, type, current)
+        list(
+          type       = type,
+          message    = sub("\n$", "", conditionMessage(cond)),
+          classes    = setdiff(class(cond), "condition"),
+          stmt_index = as.integer(current)
+        )
     }
 
     withCallingHandlers(
