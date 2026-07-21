@@ -159,3 +159,22 @@ test_that("namespaced and method-style calls still detect positional args", {
   expect_equal(length(out2), 1L)
   expect_equal(length(out2[[1]]), 2L)
 })
+
+test_that("pt_delete removes a span and trims residual whitespace", {
+  t <- "x |> rev() |> sqrt()"
+  st <- pt_pipe_stages(t)[[1]]
+  out <- pt_delete(t, list(list(from = st[[3]]$from, to = st[[3]]$to)))  # drop sqrt()
+  expect_true(pt_parses(out))
+  expect_false(grepl("  ", out))          # no double space residue
+  expect_equal(gsub(" ", "", out), "x|>rev()")
+})
+
+test_that("pt_parses rejects a dangling operator", {
+  expect_false(pt_parses("x |>  |> sqrt()"))
+  expect_true(pt_parses("x |> sqrt()"))
+})
+
+test_that("a line with a trailing comment is flagged", {
+  pd <- pt_data("f(a) # note")
+  expect_true(any(pd$token == "COMMENT"))
+})

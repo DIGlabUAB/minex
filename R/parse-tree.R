@@ -171,3 +171,30 @@ pt_call_args <- function(text) {
   }
   out
 }
+
+#' @keywords internal
+#' @noRd
+pt_delete <- function(text, spans) {
+  # sort spans by `from` descending so deletions don't shift later offsets
+  spans <- spans[order(vapply(spans, `[[`, numeric(1), "from"), decreasing = TRUE)]
+  out <- text
+  for (s in spans) {
+    out <- paste0(substr(out, 1L, s$from - 1L), substr(out, s$to + 1L, nchar(out)))
+  }
+  # collapse residual multi-space runs (whitespace is not a token; deletion
+  # leaves double spaces between surviving neighbours)
+  out <- gsub("[ \t]{2,}", " ", out)
+  out
+}
+
+#' @keywords internal
+#' @noRd
+pt_parses <- function(text) {
+  !inherits(try(parse(text = text), silent = TRUE), "try-error")
+}
+
+#' @keywords internal
+#' @noRd
+pt_has_trailing_comment <- function(pd, line) {
+  any(pd$token == "COMMENT" & pd$line1 == line)
+}
