@@ -5,16 +5,16 @@ This submission is minex 0.2.0, a feature release: not a new package.
 
 ## R CMD check results
 
-0 errors | 0 warnings | 0 notes
+Local `R CMD check --as-cran` (macOS): 0 errors | 0 warnings | 0 notes.
 
 ## Test environments
 
-* local macOS, R 4.4.2 -- `R CMD check --as-cran`: OK
-* win-builder, R-devel -- OK
-* GitHub Actions -- `R CMD check` passing on:
-  * Windows (release)
-  * macOS (release)
-  * Ubuntu (devel, release, oldrel-1)
+* local macOS -- `R CMD check --as-cran`: OK
+
+Multi-platform checks (win-builder R-devel/release and the GitHub Actions
+matrix: Windows release, macOS release, Ubuntu devel/release/oldrel-1) are to
+be run by the maintainer immediately before submission and are not yet
+reflected here.
 
 ## Notes
 
