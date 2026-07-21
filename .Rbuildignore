@@ -5,6 +5,7 @@
 ^LICENSE\.md$
 ^\.github$
 ^\.git$
+^\.superpowers$
 ^\.gitignore$
 ^.*\.Rproj$
 ^\.Rproj\.user$

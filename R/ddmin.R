@@ -44,6 +44,10 @@
 #' Input." *IEEE Transactions on Software Engineering*, 28(2), 183-200.
 #' \doi{10.1109/32.988498}
 #'
+#' Zhang M, Xu Z, Tian Y, Cheng X, Sun C (2025). "Toward a Better Understanding
+#' of Probabilistic Delta Debugging." ICSE 2025. arXiv:2408.04735.
+#' \url{https://arxiv.org/abs/2408.04735}
+#'
 #' @seealso [minex()] for the script-reduction front end and [reduce_rows()] for
 #'   reducing data frames.
 #'

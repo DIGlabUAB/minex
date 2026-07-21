@@ -74,6 +74,10 @@ ddmin(nums, function(s) sum(s) >= 11 && 6 \%in\% s)
 Zeller A, Hildebrandt R (2002). "Simplifying and Isolating Failure-Inducing
 Input." \emph{IEEE Transactions on Software Engineering}, 28(2), 183-200.
 \doi{10.1109/32.988498}
+
+Zhang M, Xu Z, Tian Y, Cheng X, Sun C (2025). "Toward a Better Understanding
+of Probabilistic Delta Debugging." ICSE 2025. arXiv:2408.04735.
+\url{https://arxiv.org/abs/2408.04735}
 }
 \seealso{
 \code{\link[=minex]{minex()}} for the script-reduction front end and \code{\link[=reduce_rows]{reduce_rows()}} for

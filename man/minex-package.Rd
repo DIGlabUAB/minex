@@ -18,5 +18,11 @@ Useful links:
 \author{
 \strong{Maintainer}: Sandeep Bodduluri \email{sbodduluri@uabmc.edu} (\href{https://orcid.org/0000-0001-8201-5262}{ORCID}) [copyright holder]
 
+Authors:
+\itemize{
+  \item Sandeep Bodduluri \email{sbodduluri@uabmc.edu} (\href{https://orcid.org/0000-0001-8201-5262}{ORCID}) [copyright holder]
+  \item Sumanth Chandrupatla \email{srchandr@uab.edu} [copyright holder]
+}
+
 }
 \keyword{internal}

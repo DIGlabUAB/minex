@@ -44,7 +44,10 @@ error > warning > message). Ignored when a custom \code{oracle} is supplied.}
 \code{oracle} is given: \code{"message"} (identical message, the default), \code{"class"}
 (shares a condition class) or \code{"both"}. Matching on the message is usually
 right, because an over-reduced fragment tends to fail with a different
-message (for example "object not found").}
+message (for example "object not found"). Can also be a function taking
+two condition summaries, \code{candidate} and \code{target} (each a list with
+\code{message} and \code{classes}), and returning a single logical, for custom
+matching logic.}
 
 \item{algorithm}{The reduction strategy passed to \code{\link[=ddmin]{ddmin()}}: \code{"cdd"}
 (convergent delta debugging, the default) or \code{"ddmin"} (the classic
@@ -53,7 +56,13 @@ block-halving loop).}
 \item{backend}{Either \code{"callr"} (evaluate each candidate in a fresh R process,
 the default and the only choice that fully isolates state) or \code{"inprocess"}
 (evaluate in the current session, faster but without isolation; a script's
-side effects other than options are not sandboxed).}
+side effects other than options are not sandboxed). \strong{Soundness caveat:}
+\code{"inprocess"} evaluates in an environment chained to the caller's global
+environment, so a candidate that references a name which happens to exist
+in the caller's workspace resolves it instead of raising \verb{object not found}. Over-reduction can therefore spuriously still "succeed" against
+that tripwire. \code{backend = "callr"} (the default) evaluates in a clean
+process and is unaffected; prefer \code{"inprocess"} only for trusted, quick
+iteration.}
 
 \item{timeout}{Maximum seconds allowed for a single \code{callr} evaluation.}
 
@@ -112,6 +121,11 @@ minex(code = script2, backend = "inprocess")
 \donttest{
 # The default backend runs candidates in fresh R processes.
 minex(code = script)
+}
+
+\dontrun{
+# Reduce a failing script copied to the system clipboard:
+minex(clipboard = TRUE)
 }
 }
 \seealso{

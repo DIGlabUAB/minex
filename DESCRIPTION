@@ -1,10 +1,12 @@
 Package: minex
 Title: Automatically Reduce Failing R Scripts to a Minimal Reproducible Example
-Version: 0.1.0
-Authors@R:
+Version: 0.2.0
+Authors@R: c(
     person("Sandeep", "Bodduluri", , "sbodduluri@uabmc.edu",
            role = c("aut", "cre", "cph"),
-           comment = c(ORCID = "0000-0001-8201-5262"))
+           comment = c(ORCID = "0000-0001-8201-5262")),
+    person("Sumanth", "Chandrupatla", email = "srchandr@uab.edu",
+           role = c("aut", "cph")))
 Description: Shrinks a failing R script to the smallest subset of statements
     that still triggers the same error, using the delta debugging algorithm of
     Zeller and Hildebrandt (2002) <doi:10.1109/32.988498>. Each candidate
@@ -18,10 +20,10 @@ Description: Shrinks a failing R script to the smallest subset of statements
 License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.3.3
 Imports:
     callr
 Suggests:
+    clipr,
     knitr,
     rmarkdown,
     spelling,
@@ -31,3 +33,4 @@ Config/testthat/edition: 3
 Language: en-US
 URL: https://github.com/DIGlabUAB/minex
 BugReports: https://github.com/DIGlabUAB/minex/issues
+Config/roxygen2/version: 8.0.0

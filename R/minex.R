@@ -37,14 +37,24 @@
 #'   `oracle` is given: `"message"` (identical message, the default), `"class"`
 #'   (shares a condition class) or `"both"`. Matching on the message is usually
 #'   right, because an over-reduced fragment tends to fail with a different
-#'   message (for example "object not found").
+#'   message (for example "object not found"). Can also be a function taking
+#'   two condition summaries, `candidate` and `target` (each a list with
+#'   `message` and `classes`), and returning a single logical, for custom
+#'   matching logic.
 #' @param algorithm The reduction strategy passed to [ddmin()]: `"cdd"`
 #'   (convergent delta debugging, the default) or `"ddmin"` (the classic
 #'   block-halving loop).
 #' @param backend Either `"callr"` (evaluate each candidate in a fresh R process,
 #'   the default and the only choice that fully isolates state) or `"inprocess"`
 #'   (evaluate in the current session, faster but without isolation; a script's
-#'   side effects other than options are not sandboxed).
+#'   side effects other than options are not sandboxed). **Soundness caveat:**
+#'   `"inprocess"` evaluates in an environment chained to the caller's global
+#'   environment, so a candidate that references a name which happens to exist
+#'   in the caller's workspace resolves it instead of raising `object not
+#'   found`. Over-reduction can therefore spuriously still "succeed" against
+#'   that tripwire. `backend = "callr"` (the default) evaluates in a clean
+#'   process and is unaffected; prefer `"inprocess"` only for trusted, quick
+#'   iteration.
 #' @param timeout Maximum seconds allowed for a single `callr` evaluation.
 #' @param max_oracle_calls Numeric upper bound on the number of oracle
 #'   evaluations, passed to [ddmin()]. When the budget is exhausted the reduction
@@ -84,6 +94,11 @@
 #' # The default backend runs candidates in fresh R processes.
 #' minex(code = script)
 #' }
+#'
+#' \dontrun{
+#' # Reduce a failing script copied to the system clipboard:
+#' minex(clipboard = TRUE)
+#' }
 #' @export
 minex <- function(file = NULL,
                   code = NULL,
@@ -97,7 +112,7 @@ minex <- function(file = NULL,
                   max_oracle_calls = Inf,
                   verbose = FALSE) {
   condition <- match.arg(condition)
-  match     <- match.arg(match)
+  if (!is.function(match)) match <- match.arg(match)
   algorithm <- match.arg(algorithm)
   backend   <- match.arg(backend)
 
