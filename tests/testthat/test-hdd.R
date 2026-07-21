@@ -61,3 +61,20 @@ test_that("comment guard excludes a span whose LATER line (not just its start li
   txt <- "x |>\n  f(bad, ok) # note"
   expect_length(hdd_reducible_by_depth(txt), 0L)
 })
+
+test_that("hdd_make_oracle memoizes by source string", {
+  calls <- 0L
+  base <- function(s) { calls <<- calls + 1L; grepl("bad", s, fixed = TRUE) }
+  oracle <- hdd_make_oracle(base)
+  oracle("f(bad)"); oracle("f(bad)"); oracle("f(ok)")
+  expect_equal(calls, 2L)   # "f(bad)" tested once, "f(ok)" once
+})
+
+test_that("hdd_star honours a tight budget and reports incomplete", {
+  txt <- "f(a, b, c, d, e)"
+  info <- new.env()
+  out <- hdd_star(txt, function(s) grepl("c", s, fixed = TRUE),
+                  max_oracle_calls = 1L, info = info)
+  expect_false(info$complete)
+  expect_true(pt_parses(out))
+})

@@ -112,3 +112,17 @@ hdd_star <- function(text, reproduces, max_oracle_calls = Inf, info = new.env())
 }
 
 `%||%` <- function(a, b) if (is.null(a)) b else a
+
+#' @keywords internal
+#' @noRd
+hdd_make_oracle <- function(run_reproduces) {
+  memo <- new.env(parent = emptyenv())
+  function(text) {
+    key <- text
+    hit <- memo[[key]]
+    if (!is.null(hit)) return(hit)
+    val <- isTRUE(run_reproduces(text))
+    assign(key, val, envir = memo)
+    val
+  }
+}
