@@ -179,11 +179,19 @@ pt_delete <- function(text, spans) {
   spans <- spans[order(vapply(spans, `[[`, numeric(1), "from"), decreasing = TRUE)]
   out <- text
   for (s in spans) {
-    out <- paste0(substr(out, 1L, s$from - 1L), substr(out, s$to + 1L, nchar(out)))
+    left <- substr(out, 1L, s$from - 1L)
+    right <- substr(out, s$to + 1L, nchar(out))
+    # Deleting [from, to] can create exactly one new adjacency: the character
+    # that used to precede `from` now sits next to the character that used to
+    # follow `to`. If that seam puts a space/tab against a space/tab, drop one
+    # of the two seam characters -- and ONLY that one. This must never touch
+    # whitespace elsewhere in the string (e.g. inside surviving string
+    # literals), so no global regex may run over `out`.
+    if (grepl("[ \t]$", left) && grepl("^[ \t]", right)) {
+      right <- sub("^[ \t]", "", right)
+    }
+    out <- paste0(left, right)
   }
-  # collapse residual multi-space runs (whitespace is not a token; deletion
-  # leaves double spaces between surviving neighbours)
-  out <- gsub("[ \t]{2,}", " ", out)
   out
 }
 

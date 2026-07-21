@@ -169,12 +169,43 @@ test_that("pt_delete removes a span and trims residual whitespace", {
   expect_equal(gsub(" ", "", out), "x|>rev()")
 })
 
+test_that("pt_delete's whitespace collapse is seam-local, not global: string-literal interior spaces survive", {
+  # Deleting the positional arg `z` (and its comma) must not touch the
+  # unrelated multi-space run inside the surviving string literal. A global
+  # gsub("[ \t]{2,}", " ", ...) over the whole candidate would corrupt
+  # "a    b" to "a b"; a seam-local fix must not.
+  t <- 'f(z, "a    b")'
+  spans <- pt_call_args(t)[[1]]
+  expect_equal(length(spans), 2L)   # `z` and the string literal are both args
+  z_span <- spans[[which.min(vapply(spans, `[[`, numeric(1), "from"))]]
+  expect_equal(substr(t, z_span$from, z_span$to), "z,")  # deletes `z` + its comma
+  out <- pt_delete(t, list(z_span))
+  expect_true(pt_parses(out))
+  expect_true(grepl('"a    b"', out, fixed = TRUE))  # all 4 interior spaces intact
+})
+
+test_that("pt_delete collapses seam whitespace independently across multiple spans", {
+  # Two single-character deletions, each sitting between two surviving
+  # spaces, so each deletion creates its own seam. The fix must collapse
+  # each seam exactly once and keep offsets correct right-to-left.
+  t <- "1 + 2 + 3 + 4 + 5"
+  span_at <- function(ch) {
+    pos <- which(strsplit(t, "")[[1]] == ch)
+    list(from = pos, to = pos)
+  }
+  out <- pt_delete(t, list(span_at("2"), span_at("4")))
+  expect_true(pt_parses(out))                 # unary +: `1 + +3 + +5` parses
+  expect_equal(out, "1 + + 3 + + 5")
+  expect_false(grepl("   ", out))              # never 3+ spaces (over-collapse)
+})
+
 test_that("pt_parses rejects a dangling operator", {
   expect_false(pt_parses("x |>  |> sqrt()"))
   expect_true(pt_parses("x |> sqrt()"))
 })
 
-test_that("a line with a trailing comment is flagged", {
-  pd <- pt_data("f(a) # note")
-  expect_true(any(pd$token == "COMMENT"))
+test_that("pt_has_trailing_comment matches the actual comment line, not just presence anywhere", {
+  pd <- pt_data("f(a) # note\ng(b)")
+  expect_true(pt_has_trailing_comment(pd, 1))   # line 1 carries the comment
+  expect_false(pt_has_trailing_comment(pd, 2))  # line 2 has none
 })
