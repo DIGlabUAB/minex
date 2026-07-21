@@ -113,3 +113,49 @@ test_that("last positional after a named arg uses the preceding comma", {
   r <- del(t, spans[[1]])
   expect_equal(gsub(" ", "", r), "f(y=1)")   # NOT "f(y = 1," (which wouldn't parse)
 })
+
+test_that("grouping parens are not mistaken for a call", {
+  t <- "(a + b)"
+  out <- pt_call_args(t)
+  expect_equal(length(out), 0L)   # no call/args detected at all
+})
+
+test_that("if-condition parens are skipped but a real nested call is still detected", {
+  t <- "if (x > 1) foo(a, b)"
+  out <- pt_call_args(t)
+  # exactly one call detected: foo(a, b) -- the if()'s '(' is not a call
+  expect_equal(length(out), 1L)
+  spans <- out[[1]]
+  expect_equal(length(spans), 2L)
+  results <- vapply(spans, function(s) del(t, s), character(1))
+  ok <- vapply(results, function(r) !inherits(try(parse(text = r), silent = TRUE), "try-error"),
+               logical(1))
+  expect_true(all(ok))
+  expect_setequal(gsub(" ", "", results), c("if(x>1)foo(b)", "if(x>1)foo(a)"))
+})
+
+test_that("for-loop parens are skipped but a real nested call is still detected", {
+  t <- "for (i in 1:3) g(a, b)"
+  out <- pt_call_args(t)
+  # exactly one call detected: g(a, b) -- the for()'s '(' is not a call
+  expect_equal(length(out), 1L)
+  spans <- out[[1]]
+  expect_equal(length(spans), 2L)
+  results <- vapply(spans, function(s) del(t, s), character(1))
+  ok <- vapply(results, function(r) !inherits(try(parse(text = r), silent = TRUE), "try-error"),
+               logical(1))
+  expect_true(all(ok))
+  expect_setequal(gsub(" ", "", results), c("for(iin1:3)g(b)", "for(iin1:3)g(a)"))
+})
+
+test_that("namespaced and method-style calls still detect positional args", {
+  t1 <- "pkg::fn(a, b)"
+  out1 <- pt_call_args(t1)
+  expect_equal(length(out1), 1L)
+  expect_equal(length(out1[[1]]), 2L)
+
+  t2 <- "x$m(a, b)"
+  out2 <- pt_call_args(t2)
+  expect_equal(length(out2), 1L)
+  expect_equal(length(out2[[1]]), 2L)
+})

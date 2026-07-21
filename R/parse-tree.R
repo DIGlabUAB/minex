@@ -127,11 +127,18 @@ pt_call_args <- function(text) {
     call_expr <- pd$parent[pd$id == op]
     kids <- pd[pd$parent == call_expr, , drop = FALSE]
     kids <- kids[order(kids$col1 + 1000L * kids$line1), ]
-    # tokens between '(' and ')'
-    commas <- kids$id[kids$token == "','"]
-    # argument exprs are the 'expr' children (positional) not preceded by SYMBOL_SUB
-    arg_rows <- which(kids$token == "expr")
-    named_marks <- kids$id[kids$token %in% c("SYMBOL_SUB", "EQ_SUB")]
+    paren <- pd[pd$id == op, ]
+    paren_key <- paren$col1 + 1000L * paren$line1
+    # A '(' opens a genuine function call only when its parent expr has a
+    # callee: a sibling `expr` token positioned strictly before the '('.
+    # Grouping parens `(a + b)` have '(' as their very first child (no expr
+    # precedes it); control-flow parens (`if (...)`, `for (...)`, `while
+    # (...)`) are preceded by a keyword token (IF/FOR/WHILE), not an expr.
+    # Verified empirically against getParseData for f(...), (a + b),
+    # if (...) foo(...), for (...) g(...), pkg::fn(...), and x$m(...).
+    has_callee <- any(kids$token == "expr" &
+                         (kids$col1 + 1000L * kids$line1) < paren_key)
+    if (!has_callee) next
     spans <- list()
     # order all relevant tokens (args, commas, named marks) by position
     seq_tokens <- kids[kids$token %in% c("expr", "','", "SYMBOL_SUB", "EQ_SUB"), , drop = FALSE]
@@ -140,8 +147,6 @@ pt_call_args <- function(text) {
     # sits BEFORE the '(' and is NOT an argument. Keep only tokens after the open
     # paren, otherwise the function name is treated as a positional arg (deleting
     # it yields "(a, b, c)", which does not parse).
-    paren <- pd[pd$id == op, ]
-    paren_key <- paren$col1 + 1000L * paren$line1
     seq_tokens <- seq_tokens[(seq_tokens$col1 + 1000L * seq_tokens$line1) > paren_key, , drop = FALSE]
     for (ri in which(seq_tokens$token == "expr")) {
       # positional iff the token immediately before is not a named-arg marker (=)
