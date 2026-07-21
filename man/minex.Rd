@@ -7,24 +7,38 @@
 minex(
   file = NULL,
   code = NULL,
+  clipboard = FALSE,
   oracle = NULL,
+  condition = c("error", "warning", "message", "any"),
   match = c("message", "class", "both"),
+  algorithm = c("cdd", "ddmin"),
   backend = c("callr", "inprocess"),
   timeout = 60,
+  max_oracle_calls = Inf,
   verbose = FALSE
 )
 }
 \arguments{
-\item{file}{Path to a file containing the R code to minimize. Ignored if
-\code{code} is supplied.}
+\item{file}{Path to a file containing the R code to minimize. Used only when
+neither \code{code} nor \code{clipboard} is supplied.}
 
 \item{code}{A character vector of R source lines, or a single string. Takes
-precedence over \code{file}.}
+precedence over both \code{clipboard} and \code{file}.}
+
+\item{clipboard}{Logical. If \code{TRUE}, read the R code to minimize from the
+system clipboard. Takes precedence over \code{file}, but is overridden by \code{code}.
+Input precedence is \verb{code > clipboard > file}; supplying more than one
+source emits a warning and the highest-precedence source is used.}
 
 \item{oracle}{Optional predicate taking a character vector of statements and
 returning a single logical. When supplied, the target failure is not
-recorded automatically and \code{match} is ignored; you are fully responsible for
-defining what counts as reproducing the failure.}
+recorded automatically and \code{condition}, \code{match} and failure-point truncation
+are all bypassed; you are fully responsible for defining what counts as
+reproducing the failure.}
+
+\item{condition}{Which kind of condition to target: \code{"error"} (the default),
+\code{"warning"}, \code{"message"}, or \code{"any"} (the most severe condition present,
+error > warning > message). Ignored when a custom \code{oracle} is supplied.}
 
 \item{match}{How a candidate's failure must match the recorded one when no
 \code{oracle} is given: \code{"message"} (identical message, the default), \code{"class"}
@@ -32,11 +46,21 @@ defining what counts as reproducing the failure.}
 right, because an over-reduced fragment tends to fail with a different
 message (for example "object not found").}
 
+\item{algorithm}{The reduction strategy passed to \code{\link[=ddmin]{ddmin()}}: \code{"cdd"}
+(convergent delta debugging, the default) or \code{"ddmin"} (the classic
+block-halving loop).}
+
 \item{backend}{Either \code{"callr"} (evaluate each candidate in a fresh R process,
 the default and the only choice that fully isolates state) or \code{"inprocess"}
-(evaluate in the current session, faster but without isolation).}
+(evaluate in the current session, faster but without isolation; a script's
+side effects other than options are not sandboxed).}
 
 \item{timeout}{Maximum seconds allowed for a single \code{callr} evaluation.}
+
+\item{max_oracle_calls}{Numeric upper bound on the number of oracle
+evaluations, passed to \code{\link[=ddmin]{ddmin()}}. When the budget is exhausted the reduction
+stops early with a warning; the result still reproduces the failure but may
+not be one-minimal.}
 
 \item{verbose}{Logical. If \code{TRUE}, report progress.}
 }

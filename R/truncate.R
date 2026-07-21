@@ -25,6 +25,19 @@ pick_target_index <- function(conditions, target, matcher, condition) {
 
 #' @keywords internal
 #' @noRd
+pick_target_condition <- function(conditions, condition) {
+  if (length(conditions) == 0L) return(NULL)
+  if (condition == "any") {
+    present <- vapply(conditions, `[[`, character(1), "type")
+    condition <- names(which.max(.minex_severity[present]))
+  }
+  matches <- Filter(function(c) c$type == condition, conditions)
+  if (length(matches) == 0L) return(NULL)
+  matches[[length(matches)]]
+}
+
+#' @keywords internal
+#' @noRd
 truncate_statements <- function(statements, failing_index) {
   if (is.na(failing_index)) {
     return(statements)

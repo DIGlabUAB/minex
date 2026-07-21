@@ -17,23 +17,39 @@
 #' a predicate, rather than against the recorded failure. The oracle receives a
 #' character vector of statements and must return a single logical.
 #'
-#' @param file Path to a file containing the R code to minimize. Ignored if
-#'   `code` is supplied.
+#' @param file Path to a file containing the R code to minimize. Used only when
+#'   neither `code` nor `clipboard` is supplied.
 #' @param code A character vector of R source lines, or a single string. Takes
-#'   precedence over `file`.
+#'   precedence over both `clipboard` and `file`.
+#' @param clipboard Logical. If `TRUE`, read the R code to minimize from the
+#'   system clipboard. Takes precedence over `file`, but is overridden by `code`.
+#'   Input precedence is `code > clipboard > file`; supplying more than one
+#'   source emits a warning and the highest-precedence source is used.
 #' @param oracle Optional predicate taking a character vector of statements and
 #'   returning a single logical. When supplied, the target failure is not
-#'   recorded automatically and `match` is ignored; you are fully responsible for
-#'   defining what counts as reproducing the failure.
+#'   recorded automatically and `condition`, `match` and failure-point truncation
+#'   are all bypassed; you are fully responsible for defining what counts as
+#'   reproducing the failure.
+#' @param condition Which kind of condition to target: `"error"` (the default),
+#'   `"warning"`, `"message"`, or `"any"` (the most severe condition present,
+#'   error > warning > message). Ignored when a custom `oracle` is supplied.
 #' @param match How a candidate's failure must match the recorded one when no
 #'   `oracle` is given: `"message"` (identical message, the default), `"class"`
 #'   (shares a condition class) or `"both"`. Matching on the message is usually
 #'   right, because an over-reduced fragment tends to fail with a different
 #'   message (for example "object not found").
+#' @param algorithm The reduction strategy passed to [ddmin()]: `"cdd"`
+#'   (convergent delta debugging, the default) or `"ddmin"` (the classic
+#'   block-halving loop).
 #' @param backend Either `"callr"` (evaluate each candidate in a fresh R process,
 #'   the default and the only choice that fully isolates state) or `"inprocess"`
-#'   (evaluate in the current session, faster but without isolation).
+#'   (evaluate in the current session, faster but without isolation; a script's
+#'   side effects other than options are not sandboxed).
 #' @param timeout Maximum seconds allowed for a single `callr` evaluation.
+#' @param max_oracle_calls Numeric upper bound on the number of oracle
+#'   evaluations, passed to [ddmin()]. When the budget is exhausted the reduction
+#'   stops early with a warning; the result still reproduces the failure but may
+#'   not be one-minimal.
 #' @param verbose Logical. If `TRUE`, report progress.
 #'
 #' @return An object of class `"minex_result"`: a list with the minimized `code`
@@ -71,65 +87,95 @@
 #' @export
 minex <- function(file = NULL,
                   code = NULL,
+                  clipboard = FALSE,
                   oracle = NULL,
+                  condition = c("error", "warning", "message", "any"),
                   match = c("message", "class", "both"),
+                  algorithm = c("cdd", "ddmin"),
                   backend = c("callr", "inprocess"),
                   timeout = 60,
+                  max_oracle_calls = Inf,
                   verbose = FALSE) {
-  match <- match.arg(match)
-  backend <- match.arg(backend)
+  condition <- match.arg(condition)
+  match     <- match.arg(match)
+  algorithm <- match.arg(algorithm)
+  backend   <- match.arg(backend)
 
-  if (is.null(code)) {
-    if (is.null(file)) {
-      stop("Supply either `file` or `code`.", call. = FALSE)
-    }
-    if (!file.exists(file)) {
-      stop("File not found: ", file, call. = FALSE)
-    }
+  # Input precedence: code > clipboard > file; warn on multi-source.
+  sources <- c(code = !is.null(code), clipboard = isTRUE(clipboard),
+               file = !is.null(file))
+  if (sum(sources) > 1L) {
+    warning("Multiple input sources supplied; using ",
+            names(sources)[which(sources)[1]], " (code > clipboard > file).",
+            call. = FALSE)
+  }
+  if (!is.null(code)) {
+    # use code as-is
+  } else if (isTRUE(clipboard)) {
+    code <- read_clipboard()
+  } else if (!is.null(file)) {
+    if (!file.exists(file)) stop("File not found: ", file, call. = FALSE)
     code <- readLines(file, warn = FALSE)
+  } else {
+    stop("Supply `code`, `file`, or `clipboard = TRUE`.", call. = FALSE)
   }
 
   statements <- split_statements(code)
   if (length(statements) < 1L) {
     stop("No parseable R statements were found in the input.", call. = FALSE)
   }
+  statements_full <- statements   # pre-truncation, for honest `original`/`n_original`
 
   target <- NULL
   if (is.null(oracle)) {
-    target <- run_code(statements, backend = backend, timeout = timeout)
-    if (!isTRUE(target$error)) {
-      stop("The input ran without error; there is nothing to minimize.",
-           call. = FALSE)
+    matcher <- build_matcher(match)
+    full <- run_code(statements, backend = backend, timeout = timeout)
+    # Choose the target condition, then its defining statement index.
+    target_cond <- pick_target_condition(full$conditions, condition)
+    if (is.null(target_cond)) {
+      stop(sprintf(
+        "The input produced no %s; nothing to minimize.", condition),
+        call. = FALSE)
     }
-    oracle <- make_target_oracle(
-      target,
-      match = match,
-      backend = backend,
-      timeout = timeout
-    )
+    idx <- pick_target_index(full$conditions, target_cond, matcher, condition)
+    target <- list(message = target_cond$message, classes = target_cond$classes,
+                   conditions = full$conditions, failing_index = idx)
+    oracle <- function(stmts) {
+      result <- run_code(stmts, backend = backend, timeout = timeout)
+      cand <- pick_target_condition(result$conditions, condition)
+      if (is.null(cand)) return(FALSE)
+      isTRUE(matcher(cand, target_cond))
+    }
+    # Free failure-point truncation, with a fallback for flaky scripts: only
+    # keep the truncated set if it still reproduces (spec section 2). One oracle call.
+    if (!is.na(idx)) {
+      truncated <- truncate_statements(statements, idx)
+      if (length(truncated) < length(statements) && isTRUE(oracle(truncated))) {
+        statements <- truncated
+      }
+    }
   } else if (!is.function(oracle)) {
     stop("`oracle` must be a function.", call. = FALSE)
   }
 
-  calls <- 0L
-  counting_oracle <- function(stmts) {
-    calls <<- calls + 1L
-    isTRUE(oracle(stmts))
+  info <- new.env()
+  minimal <- ddmin(statements, function(s) isTRUE(oracle(s)),
+                   algorithm = algorithm, max_oracle_calls = max_oracle_calls,
+                   verbose = verbose, .info = info)
+
+  if (!isTRUE(info$complete)) {
+    warning("minex stopped early; result reproduces the failure but may still ",
+            "be reducible. Re-run with a higher `max_oracle_calls`.",
+            call. = FALSE)
   }
 
-  minimal <- ddmin(statements, counting_oracle, verbose = verbose)
-
   structure(
-    list(
-      code = minimal,
-      original = statements,
-      n_original = length(statements),
-      n_minimal = length(minimal),
-      oracle_calls = calls,
-      target = target,
-      match = match,
-      backend = backend
-    ),
+    list(code = minimal, original = statements_full,
+         n_original = length(statements_full), n_minimal = length(minimal),
+         oracle_calls = info$oracle_calls, target = target, match = match,
+         backend = backend, complete = info$complete, algorithm = algorithm,
+         condition = condition, max_oracle_calls = max_oracle_calls,
+         trace = info$trace),
     class = "minex_result"
   )
 }

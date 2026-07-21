@@ -29,7 +29,7 @@ test_that("minex errors when the input does not fail", {
 })
 
 test_that("minex requires either file or code", {
-  expect_error(minex(), "Supply either")
+  expect_error(minex(), "Supply `code`")
 })
 
 test_that("minex reads from a file", {
@@ -86,4 +86,54 @@ test_that("callr backend reproduces the in-process result", {
   res <- minex(code = script, backend = "callr")
   expect_equal(res$n_minimal, 1L)
   expect_match(as.character(res), "callr boom")
+})
+
+test_that("minex targets a warning with condition = 'warning'", {
+  script <- c("x <- 1", "as.numeric('a')")  # produces a warning (NA coercion)
+  res <- minex(code = script, condition = "warning", backend = "inprocess")
+  expect_s3_class(res, "minex_result")
+  expect_true(res$n_minimal >= 1L)
+})
+
+test_that("minex errors when the requested condition type never occurs", {
+  expect_error(
+    minex(code = "stop('boom')", condition = "warning", backend = "inprocess"),
+    "warning"
+  )
+})
+
+test_that("minex warns on multiple input sources (code wins, resolves cleanly)", {
+  # Use code + file so `code` wins and resolves WITHOUT touching the clipboard
+  # (which would stop() on headless CI and turn the warning test into an error).
+  path <- tempfile(fileext = ".R"); writeLines("y <- 2", path)
+  on.exit(unlink(path), add = TRUE)
+  expect_warning(
+    minex(code = "stop('x')", file = path, backend = "inprocess"),
+    "Multiple input|code > clipboard"
+  )
+})
+
+test_that("minex reports incomplete under a tight budget", {
+  # Jointly-required, non-adjacent statements force several oracle calls, so a
+  # budget of 1 genuinely truncates the search.
+  script <- c("a <- 1", "b <- 2", "c <- 3", "stop('boom')")
+  res <- suppressWarnings(
+    minex(code = script, backend = "inprocess", max_oracle_calls = 1L)
+  )
+  expect_false(res$complete)
+})
+
+test_that("minex truncates statements after the failing one", {
+  script <- c("a <- 1", "stop('boom')", "b <- 2", "c <- 3")
+  res <- minex(code = script, backend = "inprocess")
+  # The trailing statements are gone: minimal result is just the failing line.
+  expect_equal(res$n_minimal, 1L)
+  expect_match(as.character(res), "boom")
+  expect_false(grepl("c <- 3", as.character(res)))
+})
+
+test_that("minex reduces against the promoted error under warn=2", {
+  script <- c("options(warn = 2)", "warning('w')", "y <- 1")
+  res <- minex(code = script, backend = "inprocess")
+  expect_match(as.character(res), "warning")
 })
