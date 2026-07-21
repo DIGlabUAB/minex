@@ -33,10 +33,14 @@ hdd_reducible_by_depth <- function(text) {
   }
   for (i in seq_along(spans)) spans[[i]]$depth <- span_depth(spans[[i]])
 
-  # drop spans on a line with a trailing comment (conservative)
+  # drop spans that traverse any line with a trailing comment (conservative):
+  # a multi-line span (e.g. a pipe stage) can start on a clean line but cross
+  # a later line that carries a trailing comment, so every line from the
+  # span's start through its end must be checked, not just the start line.
   keep <- vapply(spans, function(s) {
-    ln <- which(starts <= s$from); ln <- ln[length(ln)]
-    !pt_has_trailing_comment(pd, ln)
+    fl <- which(starts <= s$from); fl <- fl[length(fl)]
+    tl <- which(starts <= s$to);   tl <- tl[length(tl)]
+    !any(vapply(fl:tl, function(l) pt_has_trailing_comment(pd, l), logical(1)))
   }, logical(1))
   spans <- spans[keep]
   if (length(spans) == 0L) return(list())
