@@ -1,6 +1,7 @@
 ^README\.Rmd$
 ^cran-comments\.md$
 ^docs$
+^bench$
 ^LICENSE\.md$
 ^\.github$
 ^\.git$
