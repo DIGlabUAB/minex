@@ -85,3 +85,31 @@ test_that("pt_pipe_stages offsets round-trip on a 3-operator chain (multi-level 
   expect_silent(parsed4 <- parse(text = after_removing_stage4, keep.source = FALSE))
   expect_equal(deparse(parsed4[[1]]), deparse(parse(text = "c(b(a))")[[1]]))
 })
+
+del <- function(text, span) paste0(substr(text, 1, span$from - 1L),
+                                   substr(text, span$to + 1L, nchar(text)))
+
+test_that("positional-arg deletion parses for every position", {
+  t <- "f(a, b, c)"
+  spans <- pt_call_args(t)[[1]]
+  results <- vapply(spans, function(s) del(t, s), character(1))
+  # each single deletion must parse and be one of the expected reductions
+  ok <- vapply(results, function(r) !inherits(try(parse(text=r), silent=TRUE), "try-error"),
+               logical(1))
+  expect_true(all(ok))
+  expect_setequal(gsub(" ", "", results), c("f(b,c)", "f(a,c)", "f(a,b)"))
+})
+
+test_that("single positional arg deletes to f()", {
+  t <- "f(a)"
+  r <- del(t, pt_call_args(t)[[1]][[1]])
+  expect_equal(gsub(" ", "", r), "f()")
+})
+
+test_that("last positional after a named arg uses the preceding comma", {
+  t <- "f(y = 1, a)"                    # only `a` is positional
+  spans <- pt_call_args(t)[[1]]
+  expect_equal(length(spans), 1L)
+  r <- del(t, spans[[1]])
+  expect_equal(gsub(" ", "", r), "f(y=1)")   # NOT "f(y = 1," (which wouldn't parse)
+})

@@ -112,3 +112,57 @@ pt_pipe_stages <- function(text) {
   }
   chains
 }
+
+#' @keywords internal
+#' @noRd
+pt_call_args <- function(text) {
+  pd <- pt_data(text)
+  starts <- pt_line_offsets(text)
+  # A call expr has a child that is a function head followed by '(' ... ')'.
+  # Identify calls by the presence of a "'('" token whose parent expr also
+  # contains a SYMBOL_FUNCTION_CALL / the callee.
+  open_parens <- pd$id[pd$token == "'('"]
+  out <- list()
+  for (op in open_parens) {
+    call_expr <- pd$parent[pd$id == op]
+    kids <- pd[pd$parent == call_expr, , drop = FALSE]
+    kids <- kids[order(kids$col1 + 1000L * kids$line1), ]
+    # tokens between '(' and ')'
+    commas <- kids$id[kids$token == "','"]
+    # argument exprs are the 'expr' children (positional) not preceded by SYMBOL_SUB
+    arg_rows <- which(kids$token == "expr")
+    named_marks <- kids$id[kids$token %in% c("SYMBOL_SUB", "EQ_SUB")]
+    spans <- list()
+    # order all relevant tokens (args, commas, named marks) by position
+    seq_tokens <- kids[kids$token %in% c("expr", "','", "SYMBOL_SUB", "EQ_SUB"), , drop = FALSE]
+    seq_tokens <- seq_tokens[order(seq_tokens$col1 + 1000L * seq_tokens$line1), ]
+    # Drop the callee (function-head expr): it is a child `expr` of the call that
+    # sits BEFORE the '(' and is NOT an argument. Keep only tokens after the open
+    # paren, otherwise the function name is treated as a positional arg (deleting
+    # it yields "(a, b, c)", which does not parse).
+    paren <- pd[pd$id == op, ]
+    paren_key <- paren$col1 + 1000L * paren$line1
+    seq_tokens <- seq_tokens[(seq_tokens$col1 + 1000L * seq_tokens$line1) > paren_key, , drop = FALSE]
+    for (ri in which(seq_tokens$token == "expr")) {
+      # positional iff the token immediately before is not a named-arg marker (=)
+      prev_named <- ri > 1L && seq_tokens$token[ri - 1L] == "EQ_SUB"
+      if (prev_named) next   # value of a named arg: skip (deferred)
+      node <- seq_tokens[ri, ]
+      node_from <- pt_char_index(node$line1, node$col1, starts)
+      node_to   <- pt_char_index(node$line2, node$col2, starts)
+      # comma selection by ABSOLUTE position:
+      prev_comma <- if (ri > 1L && seq_tokens$token[ri - 1L] == "','") seq_tokens[ri - 1L, ] else NULL
+      next_comma <- if (ri < nrow(seq_tokens) && seq_tokens$token[ri + 1L] == "','") seq_tokens[ri + 1L, ] else NULL
+      if (!is.null(prev_comma)) {
+        from <- pt_char_index(prev_comma$line1, prev_comma$col1, starts); to <- node_to
+      } else if (!is.null(next_comma)) {
+        from <- node_from; to <- pt_char_index(next_comma$line2, next_comma$col2, starts)
+      } else {
+        from <- node_from; to <- node_to
+      }
+      spans[[length(spans) + 1L]] <- list(from = from, to = to)
+    }
+    if (length(spans)) out[[length(out) + 1L]] <- spans
+  }
+  out
+}
