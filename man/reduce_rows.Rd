@@ -4,7 +4,13 @@
 \alias{reduce_rows}
 \title{Reduce a data frame to the rows that reproduce a failure}
 \usage{
-reduce_rows(data, predicate, verbose = FALSE)
+reduce_rows(
+  data,
+  predicate,
+  algorithm = c("cdd", "ddmin"),
+  max_oracle_calls = Inf,
+  verbose = FALSE
+)
 }
 \arguments{
 \item{data}{A data frame.}
@@ -12,6 +18,12 @@ reduce_rows(data, predicate, verbose = FALSE)
 \item{predicate}{A function taking a data frame (a subset of \code{data}'s rows)
 and returning a single logical: \code{TRUE} when the subset still reproduces the
 failure of interest.}
+
+\item{algorithm}{Character. The reduction strategy for the first phase, one
+of \code{"cdd"} (default) or \code{"ddmin"}. Passed through to \code{\link[=ddmin]{ddmin()}}.}
+
+\item{max_oracle_calls}{Numeric. An upper bound on the number of predicate
+calls. Passed through to \code{\link[=ddmin]{ddmin()}}.}
 
 \item{verbose}{Logical. If \code{TRUE}, report progress.}
 }
