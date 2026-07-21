@@ -137,3 +137,16 @@ test_that("minex reduces against the promoted error under warn=2", {
   res <- minex(code = script, backend = "inprocess")
   expect_match(as.character(res), "warning")
 })
+
+test_that("minex accepts a function for `match` (custom condition matching)", {
+  # Regression guard: `match.arg(match)` must not run on a function argument.
+  script <- c("setup <- 1", "stop('object xyz not found')")
+  res <- minex(
+    code = script,
+    match = function(candidate, target) grepl("not found", candidate$message),
+    backend = "inprocess"
+  )
+  expect_s3_class(res, "minex_result")
+  expect_equal(res$n_minimal, 1L)
+  expect_match(as.character(res), "not found")
+})
