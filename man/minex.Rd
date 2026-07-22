@@ -68,9 +68,12 @@ iteration.}
 \item{timeout}{Maximum seconds allowed for a single \code{callr} evaluation.}
 
 \item{max_oracle_calls}{Numeric upper bound on the number of oracle
-evaluations, passed to \code{\link[=ddmin]{ddmin()}}. When the budget is exhausted the reduction
-stops early with a warning; the result still reproduces the failure but may
-not be one-minimal.}
+evaluations in the reduction search, passed to \code{\link[=ddmin]{ddmin()}} (and to the HDD
+pass when \code{granularity = "expression"}). When the budget is exhausted the
+reduction stops early with a warning; the result still reproduces the
+failure but may not be one-minimal. The one-time failure-point truncation
+probe is mandatory setup, exempt from this limit, but is still included in
+the reported \code{oracle_calls}.}
 
 \item{verbose}{Logical. If \code{TRUE}, report progress. If \code{"trace"}, also
 populate the result's \code{trace} with a per-oracle-call record. For
@@ -91,7 +94,8 @@ An object of class \code{"minex_result"}: a list with the minimized \code{code}
 (a character vector of statements), the \code{original} statements, the statement
 counts \code{n_original} and \code{n_minimal}, the character counts \code{n_chars_original}
 and \code{n_chars_minimal} (\code{nchar()} of the code collapsed to a single string,
-before and after reduction), the number of \code{oracle_calls}, the recorded
+before and after reduction), the number of \code{oracle_calls} (every predicate
+evaluation, including the failure-point truncation probe), the recorded
 \code{target} failure (or \code{NULL} for a custom oracle), the \code{granularity} setting
 used, and the \code{match} and \code{backend} settings.
 }
