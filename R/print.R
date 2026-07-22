@@ -17,6 +17,11 @@ print.minex_result <- function(x, ...) {
     cat("note: reproduces the failure but may still be reducible;",
         "re-run with a higher `max_oracle_calls`.\n")
   }
+  if (identical(x$granularity, "expression") &&
+      !is.null(x$n_chars_original) && !is.null(x$n_chars_minimal)) {
+    cat(sprintf("sub-expression: %d -> %d characters\n",
+                x$n_chars_original, x$n_chars_minimal))
+  }
   cat(strrep("-", 48L), "\n", sep = "")
   cat(paste(x$code, collapse = "\n"), "\n", sep = "")
   invisible(x)
