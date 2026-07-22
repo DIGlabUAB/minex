@@ -46,7 +46,7 @@ pt_line_offsets <- function(text) {
   lines <- strsplit(text, "\n", fixed = TRUE)[[1]]
   if (length(lines) == 0L) lines <- ""
   # character index at which each line starts (1-based), accounting for \n
-  cumsum(c(1L, head(nchar(lines) + 1L, -1L)))
+  cumsum(c(1L, utils::head(nchar(lines) + 1L, -1L)))
 }
 
 #' @keywords internal
