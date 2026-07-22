@@ -57,9 +57,12 @@
 #'   iteration.
 #' @param timeout Maximum seconds allowed for a single `callr` evaluation.
 #' @param max_oracle_calls Numeric upper bound on the number of oracle
-#'   evaluations, passed to [ddmin()]. When the budget is exhausted the reduction
-#'   stops early with a warning; the result still reproduces the failure but may
-#'   not be one-minimal.
+#'   evaluations in the reduction search, passed to [ddmin()] (and to the HDD
+#'   pass when `granularity = "expression"`). When the budget is exhausted the
+#'   reduction stops early with a warning; the result still reproduces the
+#'   failure but may not be one-minimal. The one-time failure-point truncation
+#'   probe is mandatory setup, exempt from this limit, but is still included in
+#'   the reported `oracle_calls`.
 #' @param granularity `"statement"` (the default) reduces only at the level of
 #'   top-level statements, matching 0.2.0 behavior exactly. `"expression"`
 #'   additionally reduces *within* each surviving statement via HDD (hierarchical
@@ -77,7 +80,8 @@
 #'   (a character vector of statements), the `original` statements, the statement
 #'   counts `n_original` and `n_minimal`, the character counts `n_chars_original`
 #'   and `n_chars_minimal` (`nchar()` of the code collapsed to a single string,
-#'   before and after reduction), the number of `oracle_calls`, the recorded
+#'   before and after reduction), the number of `oracle_calls` (every predicate
+#'   evaluation, including the failure-point truncation probe), the recorded
 #'   `target` failure (or `NULL` for a custom oracle), the `granularity` setting
 #'   used, and the `match` and `backend` settings.
 #'
@@ -157,6 +161,7 @@ minex <- function(file = NULL,
   statements_full <- statements   # pre-truncation, for honest `original`/`n_original`
 
   target <- NULL
+  oracle_calls_probe <- 0L   # the failure-point truncation probe, if it runs
   if (is.null(oracle)) {
     matcher <- build_matcher(match)
     full <- run_code(statements, backend = backend, timeout = timeout)
@@ -177,11 +182,16 @@ minex <- function(file = NULL,
       isTRUE(matcher(cand, target_cond))
     }
     # Free failure-point truncation, with a fallback for flaky scripts: only
-    # keep the truncated set if it still reproduces (spec section 2). One oracle call.
+    # keep the truncated set if it still reproduces (spec section 2). This is one
+    # real oracle evaluation: it is counted in the reported oracle_calls but, like
+    # ddmin's precondition, is mandatory setup and exempt from max_oracle_calls.
     if (!is.na(idx)) {
       truncated <- truncate_statements(statements, idx)
-      if (length(truncated) < length(statements) && isTRUE(oracle(truncated))) {
-        statements <- truncated
+      if (length(truncated) < length(statements)) {
+        oracle_calls_probe <- 1L
+        if (isTRUE(oracle(truncated))) {
+          statements <- truncated
+        }
       }
     }
   } else if (!is.function(oracle)) {
@@ -194,7 +204,7 @@ minex <- function(file = NULL,
                    verbose = verbose, .info = info)
 
   code_out <- minimal
-  running  <- info$oracle_calls %||% 0L      # shared counter (stmt-level + HDD)
+  running  <- (info$oracle_calls %||% 0L) + oracle_calls_probe  # shared counter (probe + stmt-level + HDD)
   complete <- isTRUE(info$complete)
   jointly_failed <- FALSE                    # per-statement reductions didn't compose
   hdd_trace_parts <- list()                  # per-statement HDD traces, tagged with stmt_index
