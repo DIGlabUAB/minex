@@ -84,6 +84,20 @@ test_that("budget exhaustion sets complete = FALSE and still reproduces", {
   expect_true(isTRUE(interesting(out)))   # never returns an unverified set
 })
 
+test_that("budget exhaustion mid-reduce returns the smallest CONFIRMED set, not the full input", {
+  # The docs promise the smallest set confirmed so far when the budget runs out.
+  # With classic ddmin on 1:100 needing only element 50, several block reductions
+  # are committed (1:50 -> 26:50 ...) before the 5-call budget trips mid-reduce.
+  # The confirmed reduction must survive the unwind rather than being discarded
+  # back to the full 100-element input.
+  e <- new.env()
+  out <- ddmin(1:100, function(s) 50L %in% s,
+               algorithm = "ddmin", max_oracle_calls = 5L, .info = e)
+  expect_false(e$complete)
+  expect_true(50L %in% out)          # soundness: still reproduces
+  expect_lt(length(out), 100L)       # progress preserved, not reset to full
+})
+
 test_that("max_oracle_calls < 1 errors rather than returning unverified", {
   expect_error(
     ddmin(1:5, function(s) length(s) > 0, max_oracle_calls = 0L),

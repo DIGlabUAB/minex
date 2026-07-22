@@ -4,7 +4,7 @@ PROBDD_GROWTH_RATE <- 1 / (1 - exp(-1))
 
 #' @keywords internal
 #' @noRd
-cdd_reduce <- function(kept, test) {
+cdd_reduce <- function(kept, test, progress = NULL) {
   round_index <- 0L
   repeat {
     len <- length(kept)
@@ -29,6 +29,7 @@ cdd_reduce <- function(kept, test) {
       complement <- setdiff(kept, block)
       if (length(complement) > 0L && isTRUE(test(complement))) {
         kept <- complement
+        checkpoint(progress, kept)
         round_index <- 0L
         hit <- TRUE
         break

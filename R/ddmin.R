@@ -129,16 +129,23 @@ ddmin <- function(items, interesting,
 
   reduce_fn <- if (algorithm == "cdd") cdd_reduce else ddmin_classic
   kept <- seq_len(n_items)
+  # A budget-exhausted call unwinds out of the reducer via a condition, discarding
+  # its stack frame. The reducers checkpoint each CONFIRMED reduction here so the
+  # smallest set proven so far survives the unwind (docs promise this, not the
+  # full input). `progress$kept` only ever holds a set that tested TRUE.
+  progress <- new.env(parent = emptyenv())
+  progress$kept <- kept
   tryCatch(
     {
       say("reduce phase (", algorithm, "), ", length(kept), " items")
-      kept <- reduce_fn(kept, test)
+      kept <- reduce_fn(kept, test, progress)
       phase <- "verify"
       say("verify phase, ", length(kept), " items")
-      kept <- remove_removable_singles(kept, test)
+      kept <- remove_removable_singles(kept, test, progress)
     },
     minex_oracle_limit_reached = function(e) {
       complete <<- FALSE
+      kept <<- progress$kept   # recover the smallest confirmed set
       say("oracle-call limit reached; result may still be reducible")
     }
   )
@@ -153,7 +160,7 @@ ddmin <- function(items, interesting,
 
 #' @keywords internal
 #' @noRd
-ddmin_classic <- function(kept, test) {
+ddmin_classic <- function(kept, test, progress = NULL) {
   n <- 2L
   repeat {
     len <- length(kept)
@@ -161,12 +168,19 @@ ddmin_classic <- function(kept, test) {
     groups <- as.integer(cut(seq_len(len), breaks = min(n, len), labels = FALSE))
     blocks <- unname(split(kept, groups))
     hit <- Find(function(b) test(b), blocks)
-    if (!is.null(hit)) { kept <- hit; n <- 2L; next }
+    if (!is.null(hit)) { kept <- hit; checkpoint(progress, kept); n <- 2L; next }
     complements <- lapply(blocks, function(b) setdiff(kept, b))
     hit <- Find(function(b) length(b) > 0L && test(b), complements)
-    if (!is.null(hit)) { kept <- hit; n <- max(n - 1L, 2L); next }
+    if (!is.null(hit)) { kept <- hit; checkpoint(progress, kept); n <- max(n - 1L, 2L); next }
     if (n >= len) break
     n <- min(2L * n, len)
   }
   kept
+}
+
+# Record a confirmed reduction so it survives a budget-exhaustion unwind.
+#' @keywords internal
+#' @noRd
+checkpoint <- function(progress, kept) {
+  if (!is.null(progress)) progress$kept <- kept
 }
