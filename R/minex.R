@@ -189,6 +189,7 @@ minex <- function(file = NULL,
   code_out <- minimal
   running  <- info$oracle_calls %||% 0L      # shared counter (stmt-level + HDD)
   complete <- isTRUE(info$complete)
+  jointly_failed <- FALSE                    # per-statement reductions didn't compose
   if (granularity == "expression") {
     for (i in seq_along(minimal)) {
       # reproduce(cand_text): replace statement i with the candidate, run the
@@ -209,9 +210,33 @@ minex <- function(file = NULL,
       running <- running + (sub$oracle_calls %||% 0L)
       if (!isTRUE(sub$complete)) complete <- FALSE
     }
+
+    # Each statement was reduced against the OTHERS held at their un-reduced
+    # (`minimal`) form, so independently-valid per-statement reductions can
+    # still fail to reproduce when combined. Joint-verify the assembled
+    # `code_out` before trusting it; fall back to the known-good `minimal`
+    # when the composition doesn't hold or can't be confirmed.
+    if (!identical(code_out, minimal)) {
+      remaining <- if (is.finite(max_oracle_calls)) max_oracle_calls - running else Inf
+      if (is.finite(remaining) && remaining < 1) {
+        # Can't afford the verify call: unconfirmed, so don't trust code_out.
+        code_out <- minimal
+        complete <- FALSE
+      } else {
+        running <- running + 1L
+        if (!isTRUE(oracle(code_out))) {
+          code_out <- minimal
+          jointly_failed <- TRUE
+          complete <- FALSE
+        }
+      }
+    }
   }
 
-  if (!complete) {
+  if (jointly_failed) {
+    warning("Sub-expression reductions did not jointly reproduce the failure; ",
+            "returning the statement-level result.", call. = FALSE)
+  } else if (!complete) {
     warning("minex stopped early; result reproduces the failure but may still ",
             "be reducible. Re-run with a higher `max_oracle_calls`.",
             call. = FALSE)

@@ -165,6 +165,13 @@ test_that("granularity='statement' (default) is unchanged from 0.2.0", {
   res <- minex(code = script, backend = "inprocess")
   expect_equal(res$n_minimal, 1L)
   expect_match(as.character(res), "log")
+  # Additive 0.3.0 fields must not perturb the statement-granularity path.
+  expect_equal(res$granularity, "statement")
+  expect_type(res$n_chars_original, "integer")
+  expect_type(res$n_chars_minimal, "integer")
+  expect_type(res$complete, "logical")
+  expect_true(res$complete)
+  expect_type(res$oracle_calls, "integer")
 })
 
 test_that("minex_result keeps n_minimal integer and code a per-statement vector", {
@@ -173,4 +180,75 @@ test_that("minex_result keeps n_minimal integer and code a per-statement vector"
   expect_type(res$n_minimal, "integer")
   expect_equal(res$n_minimal, length(res$code))
   expect_type(res$n_chars_minimal, "integer")
+})
+
+test_that("granularity='expression' pipeline reduction produces the exact expected code", {
+  script <- c("x <- 1:10",
+              "result <- x |> rev() |> sqrt() |> log('oops not a base')")
+  res <- minex(code = script, granularity = "expression", backend = "inprocess")
+  expect_equal(
+    res$code,
+    c("x <- 1:10", "result <- x |> log('oops not a base')")
+  )
+})
+
+test_that("granularity='expression' result always reproduces the target failure (joint-soundness)", {
+  # Guards against the joint-soundness gap: each statement is reduced against
+  # the OTHER statements held at their un-reduced form, so the assembled
+  # code_out must be joint-verified (or fall back) before being returned.
+  script <- c("x <- 1:10",
+              "result <- x |> rev() |> sqrt() |> log('oops not a base')")
+  res <- minex(code = script, granularity = "expression", backend = "inprocess")
+
+  rerun <- run_code(res$code, backend = "inprocess")
+  cand <- pick_target_condition(rerun$conditions, res$condition)
+  expect_false(is.null(cand))
+  matcher <- build_matcher(res$match)
+  expect_true(isTRUE(matcher(cand, res$target)))
+})
+
+test_that("granularity='expression' falls back to the statement-level result when sub-expression reductions don't jointly reproduce", {
+  # A custom oracle that deterministically returns TRUE for any candidate in
+  # which at most one of the two statements is shorter than its original
+  # (i.e. reproduces per-statement, which is all the inner HDD loop checks,
+  # since the loop always holds the OTHER statement at its unreduced form)
+  # but FALSE once BOTH statements are simultaneously shortened. This
+  # reliably forces the two per-statement reductions to independently
+  # "succeed" while their composition does not -- the exact defect class the
+  # final joint-verify + fallback exists to catch.
+  orig <- c("z1 <- 1 |> abs() |> sqrt()",
+            "z2 <- 2 |> abs() |> sqrt()")
+  fallback_oracle <- function(stmts) {
+    if (length(stmts) != 2) return(FALSE)
+    reduced <- c(nchar(stmts[1]) < nchar(orig[1]),
+                 nchar(stmts[2]) < nchar(orig[2]))
+    !(reduced[1] && reduced[2])
+  }
+
+  expect_warning(
+    res <- minex(code = orig, oracle = fallback_oracle,
+                 granularity = "expression", backend = "inprocess"),
+    "did not jointly reproduce"
+  )
+  expect_identical(res$code, orig)   # fell back to the statement-level form
+  expect_false(res$complete)
+})
+
+test_that("granularity='expression' warns when the HDD phase (not statement-level ddmin) hits budget", {
+  # budget=6 lets statement-level ddmin finish (it needs 3 calls here and
+  # both statements are jointly required) but truncates the subsequent HDD
+  # pass, so this exercises the budget-limited path distinct from the
+  # non-composition fallback above.
+  script <- c("x <- 1:10",
+              "result <- x |> rev() |> sqrt() |> log('oops not a base')")
+  res <- suppressWarnings(
+    minex(code = script, granularity = "expression", backend = "inprocess",
+          max_oracle_calls = 6L)
+  )
+  expect_false(res$complete)
+  expect_warning(
+    minex(code = script, granularity = "expression", backend = "inprocess",
+          max_oracle_calls = 6L),
+    "stopped early"
+  )
 })
