@@ -252,3 +252,34 @@ test_that("granularity='expression' warns when the HDD phase (not statement-leve
     "stopped early"
   )
 })
+
+test_that("granularity='expression' + verbose='trace' tags HDD rows with stmt_index/level", {
+  script <- c("x <- 1:10",
+              "result <- x |> rev() |> sqrt() |> log('oops not a base')")
+  res <- minex(code = script, granularity = "expression", verbose = "trace",
+               backend = "inprocess")
+  expect_s3_class(res$trace, "data.frame")
+  expect_true(all(c("stmt_index", "level") %in% names(res$trace)))
+  # HDD rows: both stmt_index and level are populated.
+  expect_true(any(!is.na(res$trace$stmt_index) & !is.na(res$trace$level)))
+  # Statement-level rows (if any): stmt_index and level are NA.
+  stmt_rows <- is.na(res$trace$stmt_index)
+  if (any(stmt_rows)) {
+    expect_true(all(is.na(res$trace$level[stmt_rows])))
+  }
+})
+
+test_that("granularity='statement' + verbose='trace' trace is unchanged (no stmt_index/level)", {
+  script <- c("a <- 1", "b <- 2", "log('not a number')")
+  res <- minex(code = script, verbose = "trace", backend = "inprocess")
+  expect_s3_class(res$trace, "data.frame")
+  expect_false(any(c("stmt_index", "level") %in% names(res$trace)))
+  expect_equal(names(res$trace), c("call", "phase", "size", "kept", "cached", "event"))
+})
+
+test_that("granularity='expression' with default verbose yields a NULL trace (no fabrication)", {
+  script <- c("x <- 1:10",
+              "result <- x |> rev() |> sqrt() |> log('oops not a base')")
+  res <- minex(code = script, granularity = "expression", backend = "inprocess")
+  expect_null(res$trace)
+})

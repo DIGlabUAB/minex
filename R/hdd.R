@@ -52,10 +52,13 @@ hdd_reducible_by_depth <- function(text) {
 
 #' @keywords internal
 #' @noRd
-hdd_star <- function(text, reproduces, max_oracle_calls = Inf, info = new.env()) {
+hdd_star <- function(text, reproduces, max_oracle_calls = Inf, info = new.env(),
+                     verbose = FALSE) {
   current <- text
   total_calls <- 0L
   complete <- TRUE
+  do_trace <- wants_trace(verbose)
+  trace_parts <- list()
   repeat {                                   # outer fixpoint => HDD*
     levels <- hdd_reducible_by_depth(current)
     if (length(levels) == 0L) break
@@ -77,9 +80,14 @@ hdd_star <- function(text, reproduces, max_oracle_calls = Inf, info = new.env())
       # We want the SMALLEST set of spans to KEEP such that dropping the rest
       # still reproduces -> ddmin finds a 1-minimal keep-set; then delete the rest.
       kept <- ddmin(idx, function(k) interesting(k),
-                    max_oracle_calls = remaining, verbose = FALSE, .info = sub)
+                    max_oracle_calls = remaining, verbose = verbose, .info = sub)
       lvl_calls <- sub$oracle_calls %||% 0L
       if (!isTRUE(sub$complete)) complete <- FALSE
+      if (do_trace && !is.null(sub$trace)) {
+        tagged <- sub$trace
+        tagged$level <- level[[1]]$depth
+        trace_parts[[length(trace_parts) + 1L]] <- tagged
+      }
       # ddmin NEVER returns an empty keep-set (sweep.R guards `length(kept) > 1`
       # and cdd_reduce rejects empty complements). So a depth level whose spans
       # are ALL unnecessary would keep one spurious span, violating the spec's
@@ -108,6 +116,9 @@ hdd_star <- function(text, reproduces, max_oracle_calls = Inf, info = new.env())
   }
   info$oracle_calls <- total_calls
   info$complete <- complete
+  if (do_trace) {
+    info$trace <- if (length(trace_parts) == 0L) NULL else do.call(rbind, trace_parts)
+  }
   current
 }
 

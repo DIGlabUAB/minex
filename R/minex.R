@@ -66,7 +66,12 @@
 #'   delta debugging): pipeline stages (`|>`, magrittr `%>%`) and positional call
 #'   arguments can be dropped from a statement as long as the whole kept set
 #'   still reproduces the target failure.
-#' @param verbose Logical. If `TRUE`, report progress.
+#' @param verbose Logical. If `TRUE`, report progress. If `"trace"`, also
+#'   populate the result's `trace` with a per-oracle-call record. For
+#'   `granularity = "expression"`, HDD's rows additionally carry `stmt_index`
+#'   (which statement they reduced) and `level` (the HDD tree depth); the
+#'   statement-level rows have `NA` in both. For `granularity = "statement"`
+#'   the trace is unchanged from 0.2.0 (no `stmt_index`/`level` columns).
 #'
 #' @return An object of class `"minex_result"`: a list with the minimized `code`
 #'   (a character vector of statements), the `original` statements, the statement
@@ -190,6 +195,7 @@ minex <- function(file = NULL,
   running  <- info$oracle_calls %||% 0L      # shared counter (stmt-level + HDD)
   complete <- isTRUE(info$complete)
   jointly_failed <- FALSE                    # per-statement reductions didn't compose
+  hdd_trace_parts <- list()                  # per-statement HDD traces, tagged with stmt_index
   if (granularity == "expression") {
     for (i in seq_along(minimal)) {
       # reproduce(cand_text): replace statement i with the candidate, run the
@@ -206,9 +212,15 @@ minex <- function(file = NULL,
       sub <- new.env()
       remaining <- if (is.finite(max_oracle_calls)) max_oracle_calls - running else Inf
       if (is.finite(remaining) && remaining < 1) { complete <- FALSE; break }
-      code_out[i] <- hdd_star(minimal[i], hoc, max_oracle_calls = remaining, info = sub)
+      code_out[i] <- hdd_star(minimal[i], hoc, max_oracle_calls = remaining, info = sub,
+                              verbose = verbose)
       running <- running + (sub$oracle_calls %||% 0L)
       if (!isTRUE(sub$complete)) complete <- FALSE
+      if (wants_trace(verbose) && !is.null(sub$trace)) {
+        tagged <- sub$trace
+        tagged$stmt_index <- i
+        hdd_trace_parts[[length(hdd_trace_parts) + 1L]] <- tagged
+      }
     }
 
     # Each statement was reduced against the OTHERS held at their un-reduced
@@ -242,13 +254,39 @@ minex <- function(file = NULL,
             call. = FALSE)
   }
 
+  # Trace assembly. Statement-granularity (or non-"trace" verbose) keeps the
+  # `call,phase,size,kept,cached,event` shape byte-for-byte (L14): only when
+  # HDD actually ran under verbose = "trace" do stmt_index/level get added.
+  if (granularity == "expression" && wants_trace(verbose)) {
+    stmt_trace <- info$trace
+    if (!is.null(stmt_trace)) {
+      stmt_trace$stmt_index <- NA_integer_
+      stmt_trace$level <- NA_integer_
+    }
+    hdd_trace <- if (length(hdd_trace_parts) == 0L) {
+      NULL
+    } else {
+      do.call(rbind, hdd_trace_parts)
+    }
+    trace_cols <- c("call", "phase", "size", "kept", "cached", "event",
+                    "stmt_index", "level")
+    trace_pieces <- Filter(Negate(is.null), list(stmt_trace, hdd_trace))
+    trace_out <- if (length(trace_pieces) == 0L) {
+      NULL
+    } else {
+      do.call(rbind, lapply(trace_pieces, `[`, trace_cols))
+    }
+  } else {
+    trace_out <- info$trace
+  }
+
   structure(
     list(code = code_out, original = statements_full,
          n_original = length(statements_full), n_minimal = length(code_out),
          oracle_calls = running, target = target, match = match,
          backend = backend, complete = complete, algorithm = algorithm,
          condition = condition, max_oracle_calls = max_oracle_calls,
-         trace = info$trace, granularity = granularity,
+         trace = trace_out, granularity = granularity,
          n_chars_original = nchar(paste(statements_full, collapse = "\n")),
          n_chars_minimal = nchar(paste(code_out, collapse = "\n"))),
     class = "minex_result"
