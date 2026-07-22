@@ -35,6 +35,20 @@ test_that("run_code under warn=2 records ONE error carrying warning classes", {
   expect_true("myWarn" %in% promoted[[1]]$classes)
 })
 
+test_that("run_code records a real error after a recovered warn=2 promotion in one statement", {
+  # Under warn>=2 the warning is promoted to an error, which the statement's OWN
+  # tryCatch catches and recovers from; the statement then raises a genuine,
+  # uncaught error. That real error must still be recorded -- it must not be
+  # masked by the earlier (recovered) promotion sharing the same stmt index.
+  code <- c(
+    "options(warn = 2)",
+    "{ tryCatch(warning('promoted'), error = function(e) NULL); stop('real error') }"
+  )
+  res <- run_code(code, backend = "inprocess")
+  msgs <- vapply(res$conditions, `[[`, character(1), "message")
+  expect_true("real error" %in% msgs)
+})
+
 test_that("run_code ignores conditions the script catches itself", {
   code <- c("try(stop('caught'), silent = TRUE)", "stop('real')")
   res <- run_code(code, backend = "inprocess")

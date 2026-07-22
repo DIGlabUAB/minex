@@ -7,7 +7,7 @@ run_code <- function(code, backend = c("callr", "inprocess"), timeout = 60) {
   runner <- function(statements) {
     env <- new.env(parent = globalenv())
     conditions <- list()
-    promoted_idx <- integer(0)   # stmt indices already recorded via warn=2 promotion
+    promoted_msgs <- character(0) # messages already recorded via warn=2 promotion
     current <- 0L
 
     record <- function(cond, type) {
@@ -27,9 +27,17 @@ run_code <- function(code, backend = c("callr", "inprocess"), timeout = 60) {
           eval(parse(text = statements[[i]])[[1]], envir = env)
         },
         error = function(e) {
-          # Skip the "(converted from warning)" error already recorded by the
-          # warning handler under warn=2 (avoids a duplicate, class-stripped entry).
-          if (!(current %in% promoted_idx)) record(e, "error")
+          # Under warn>=2 a warning is promoted to an error whose message is the
+          # warning text with a "(converted from warning) " prefix; the warning
+          # handler already recorded it, so skip that duplicate (a class-stripped
+          # re-entry). Match on the message rather than the statement index: a
+          # single top-level statement (e.g. a `{...}` block) may recover the
+          # promotion via its own tryCatch and then raise a genuinely different
+          # error, which shares the index but not the message and must be kept.
+          em <- conditionMessage(e)
+          is_promotion_dup <- any(vapply(
+            promoted_msgs, function(m) nzchar(m) && endsWith(em, m), logical(1)))
+          if (!is_promotion_dup) record(e, "error")
         }
       ),
       warning = function(w) {
@@ -37,7 +45,7 @@ run_code <- function(code, backend = c("callr", "inprocess"), timeout = 60) {
           # R will promote this to an error and halt; record it now, preserving
           # the original warning classes, and let promotion proceed (no muffle).
           record(w, "error")
-          promoted_idx <<- c(promoted_idx, current)
+          promoted_msgs <<- c(promoted_msgs, conditionMessage(w))
         } else {
           record(w, "warning")
           invokeRestart("muffleWarning")
