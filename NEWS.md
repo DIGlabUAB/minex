@@ -1,3 +1,12 @@
+# minex 0.3.0
+
+* `minex(granularity = "expression")` reduces *within* a statement, isolating a
+  failing pipeline stage (`|>`/`%>%`) or positional call argument via
+  Hierarchical Delta Debugging (HDD*). The default `"statement"` is unchanged.
+* The result gains `n_chars_original` and `n_chars_minimal` (character counts
+  of the code before and after reduction) and a `granularity` field recording
+  which mode produced the result.
+
 # minex 0.2.0
 
 * `minex()` can target warnings and messages, not just errors, via `condition`.

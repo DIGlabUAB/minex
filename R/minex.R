@@ -68,16 +68,18 @@
 #'   still reproduces the target failure.
 #' @param verbose Logical. If `TRUE`, report progress. If `"trace"`, also
 #'   populate the result's `trace` with a per-oracle-call record. For
-#'   `granularity = "expression"`, HDD's rows additionally carry `stmt_index`
+#'   `granularity = "expression"`, the HDD trace rows additionally carry `stmt_index`
 #'   (which statement they reduced) and `level` (the HDD tree depth); the
 #'   statement-level rows have `NA` in both. For `granularity = "statement"`
 #'   the trace is unchanged from 0.2.0 (no `stmt_index`/`level` columns).
 #'
 #' @return An object of class `"minex_result"`: a list with the minimized `code`
 #'   (a character vector of statements), the `original` statements, the statement
-#'   counts `n_original` and `n_minimal`, the number of `oracle_calls`, the
-#'   recorded `target` failure (or `NULL` for a custom oracle), and the `match`
-#'   and `backend` settings.
+#'   counts `n_original` and `n_minimal`, the character counts `n_chars_original`
+#'   and `n_chars_minimal` (`nchar()` of the code collapsed to a single string,
+#'   before and after reduction), the number of `oracle_calls`, the recorded
+#'   `target` failure (or `NULL` for a custom oracle), the `granularity` setting
+#'   used, and the `match` and `backend` settings.
 #'
 #' @seealso [ddmin()] for the underlying algorithm and [reduce_rows()] for
 #'   reducing data frames.

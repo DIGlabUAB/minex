@@ -15,7 +15,8 @@ minex(
   backend = c("callr", "inprocess"),
   timeout = 60,
   max_oracle_calls = Inf,
-  verbose = FALSE
+  verbose = FALSE,
+  granularity = c("statement", "expression")
 )
 }
 \arguments{
@@ -71,14 +72,28 @@ evaluations, passed to \code{\link[=ddmin]{ddmin()}}. When the budget is exhaust
 stops early with a warning; the result still reproduces the failure but may
 not be one-minimal.}
 
-\item{verbose}{Logical. If \code{TRUE}, report progress.}
+\item{verbose}{Logical. If \code{TRUE}, report progress. If \code{"trace"}, also
+populate the result's \code{trace} with a per-oracle-call record. For
+\code{granularity = "expression"}, the HDD trace rows additionally carry \code{stmt_index}
+(which statement they reduced) and \code{level} (the HDD tree depth); the
+statement-level rows have \code{NA} in both. For \code{granularity = "statement"}
+the trace is unchanged from 0.2.0 (no \code{stmt_index}/\code{level} columns).}
+
+\item{granularity}{\code{"statement"} (the default) reduces only at the level of
+top-level statements, matching 0.2.0 behavior exactly. \code{"expression"}
+additionally reduces \emph{within} each surviving statement via HDD (hierarchical
+delta debugging): pipeline stages (\verb{|>}, magrittr \verb{\%>\%}) and positional call
+arguments can be dropped from a statement as long as the whole kept set
+still reproduces the target failure.}
 }
 \value{
 An object of class \code{"minex_result"}: a list with the minimized \code{code}
 (a character vector of statements), the \code{original} statements, the statement
-counts \code{n_original} and \code{n_minimal}, the number of \code{oracle_calls}, the
-recorded \code{target} failure (or \code{NULL} for a custom oracle), and the \code{match}
-and \code{backend} settings.
+counts \code{n_original} and \code{n_minimal}, the character counts \code{n_chars_original}
+and \code{n_chars_minimal} (\code{nchar()} of the code collapsed to a single string,
+before and after reduction), the number of \code{oracle_calls}, the recorded
+\code{target} failure (or \code{NULL} for a custom oracle), the \code{granularity} setting
+used, and the \code{match} and \code{backend} settings.
 }
 \description{
 Reduces a failing piece of R code to the smallest subset of its top-level

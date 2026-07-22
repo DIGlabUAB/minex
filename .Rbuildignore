@@ -6,6 +6,7 @@
 ^\.github$
 ^\.git$
 ^\.superpowers$
+^\.claude$
 ^\.gitignore$
 ^.*\.Rproj$
 ^\.Rproj\.user$
