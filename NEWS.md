@@ -7,6 +7,22 @@
   of the code before and after reduction) and a `granularity` field recording
   which mode produced the result.
 
+Bug fixes:
+
+* `ddmin()` (and `minex()`/`reduce_rows()`) now return the smallest *confirmed*
+  subset when `max_oracle_calls` is exhausted mid-reduction, instead of the whole
+  input. The result was already labelled `complete = FALSE`; it now
+  also keeps the reduction confirmed before the budget ran out.
+* `oracle_calls` now includes the one-off failure-point truncation probe, so the
+  reported count reflects every predicate evaluation (the probe was previously
+  uncounted).
+* `granularity = "expression"` now drops any statement left redundant by
+  sub-expression reduction (for example when an argument is stripped from a later
+  call), keeping the result statement-minimal.
+* Fixed a case under the in-process backend where a script that recovered from a
+  warning promoted to an error via `options(warn = 2)` and then failed for a
+  different reason could record the wrong failure.
+
 # minex 0.2.0
 
 * `minex()` can target warnings and messages, not just errors, via `condition`.
