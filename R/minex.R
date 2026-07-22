@@ -68,7 +68,9 @@
 #'   additionally reduces *within* each surviving statement via HDD (hierarchical
 #'   delta debugging): pipeline stages (`|>`, magrittr `%>%`) and positional call
 #'   arguments can be dropped from a statement as long as the whole kept set
-#'   still reproduces the target failure.
+#'   still reproduces the target failure. When such a reduction makes an earlier
+#'   statement redundant (for example a value dropped from a later call), that
+#'   statement is swept out, so the result stays statement one-minimal.
 #' @param verbose Logical. If `TRUE`, report progress. If `"trace"`, also
 #'   populate the result's `trace` with a per-oracle-call record. For
 #'   `granularity = "expression"`, the HDD trace rows additionally carry `stmt_index`
@@ -252,6 +254,30 @@ minex <- function(file = NULL,
           code_out <- minimal
           jointly_failed <- TRUE
           complete <- FALSE
+        } else {
+          # code_out is confirmed to reproduce. A statement HDD stripped down
+          # (e.g. an argument dropped from a later call) can now be redundant, so
+          # the statement set may no longer be one-minimal. Re-sweep to a
+          # fixpoint: drop any statement whose removal still reproduces. Sound --
+          # each drop is oracle-confirmed first; the calls are budgeted exactly
+          # like the joint-verify above.
+          repeat {
+            removed_any <- FALSE
+            i <- 1L
+            while (i <= length(code_out) && length(code_out) > 1L) {
+              remaining <- if (is.finite(max_oracle_calls)) max_oracle_calls - running else Inf
+              if (is.finite(remaining) && remaining < 1) { complete <- FALSE; break }
+              running <- running + 1L
+              if (isTRUE(oracle(code_out[-i]))) {
+                code_out <- code_out[-i]   # element now at i is new; do not advance
+                removed_any <- TRUE
+              } else {
+                i <- i + 1L
+              }
+            }
+            remaining <- if (is.finite(max_oracle_calls)) max_oracle_calls - running else Inf
+            if (!removed_any || (is.finite(remaining) && remaining < 1)) break
+          }
         }
       }
     }

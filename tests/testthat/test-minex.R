@@ -32,6 +32,18 @@ test_that("minex requires either file or code", {
   expect_error(minex(), "Supply `code`")
 })
 
+test_that("minex re-sweeps statements made redundant by sub-expression reduction", {
+  # HDD drops the `zz_dat` argument from transform(), so the failure stops
+  # depending on the data-frame statement. That statement must then be swept out
+  # for the expression-granularity result to stay statement-minimal.
+  code <- c("zz_dat <- data.frame(qq = 1:3)",
+            "res <- transform(zz_dat, bb = zz_missing_col + qq)")
+  res <- minex(code = code, backend = "inprocess", granularity = "expression")
+  expect_equal(res$n_minimal, 1L)
+  expect_match(res$code, "transform")
+  expect_false(any(grepl("zz_dat <-", res$code)))
+})
+
 test_that("minex counts the failure-point truncation probe in oracle_calls", {
   # Failure at statement 1 of 2 -> truncation to [1] fires exactly one real oracle
   # probe. The reported oracle_calls must include it: 1 probe + 1 ddmin precondition

@@ -87,7 +87,9 @@ top-level statements, matching 0.2.0 behavior exactly. \code{"expression"}
 additionally reduces \emph{within} each surviving statement via HDD (hierarchical
 delta debugging): pipeline stages (\verb{|>}, magrittr \verb{\%>\%}) and positional call
 arguments can be dropped from a statement as long as the whole kept set
-still reproduces the target failure.}
+still reproduces the target failure. When such a reduction makes an earlier
+statement redundant (for example a value dropped from a later call), that
+statement is swept out, so the result stays statement one-minimal.}
 }
 \value{
 An object of class \code{"minex_result"}: a list with the minimized \code{code}
