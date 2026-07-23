@@ -15,3 +15,13 @@ is_denylisted <- function(code) {
   patterns <- paste0("\\b", gsub(".", "\\.", .minex_denylist, fixed = TRUE), "\\s*\\(")
   any(vapply(patterns, function(p) grepl(p, text), logical(1)))
 }
+
+#' @keywords internal
+#' @noRd
+target_type <- function(target, condition) {
+  if (!identical(condition, "any")) {
+    return(condition)
+  }
+  tc <- pick_target_condition(target$conditions, "any")
+  if (is.null(tc)) condition else tc$type
+}
