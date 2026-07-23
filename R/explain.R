@@ -99,6 +99,16 @@ build_bug_report <- function(x, raw, session_info) {
 #' @param session_info Logical. Include `utils::sessionInfo()` in the bug report.
 #' @param modes Which sections to produce.
 #' @return A `minex_explanation` object.
+#' @examples
+#' \dontrun{
+#' # Write a failing script and reduce it, then explain the failure.
+#' tmp <- tempfile(fileext = ".R")
+#' writeLines("x <- c(1, 2, NA)\nif (is.na(mean(x))) stop('mean is NA')", tmp)
+#' res <- minex(tmp, backend = "inprocess")
+#' # Requires a configured chat backend (e.g. ellmer::chat_ollama()).
+#' explain_failure(res, chat = ellmer::chat_ollama(model = "llama3.2"),
+#'                 verify_fix = FALSE)
+#' }
 #' @export
 explain_failure <- function(x, chat = NULL, verify_fix = TRUE, timeout = 60,
                             session_info = TRUE,

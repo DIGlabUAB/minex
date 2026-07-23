@@ -42,3 +42,14 @@ fix is run in a fresh \code{callr} process with a timeout. \code{callr} isolates
 session state, not the OS; a fix may still have side effects. Use
 \code{verify_fix = FALSE} for input you would not run yourself.
 }
+\examples{
+\dontrun{
+# Write a failing script and reduce it, then explain the failure.
+tmp <- tempfile(fileext = ".R")
+writeLines("x <- c(1, 2, NA)\nif (is.na(mean(x))) stop('mean is NA')", tmp)
+res <- minex(tmp, backend = "inprocess")
+# Requires a configured chat backend (e.g. ellmer::chat_ollama()).
+explain_failure(res, chat = ellmer::chat_ollama(model = "llama3.2"),
+                verify_fix = FALSE)
+}
+}

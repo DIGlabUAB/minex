@@ -1,3 +1,10 @@
+# minex 0.4.0
+
+* `explain_failure()` hands a `minex()` result to an LLM, returning a structured
+  explanation of why it fails, a proposed fix, a paste-ready bug report, and a
+  diagnosis. The fix can be auto-verified by running it through the existing
+  oracle. Requires the suggested `ellmer` package and a configured chat backend.
+
 # minex 0.3.0
 
 * `minex(granularity = "expression")` reduces *within* a statement, isolating a
