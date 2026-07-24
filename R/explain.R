@@ -2,11 +2,13 @@
 #' @noRd
 new_minex_explanation <- function(raw, modes, model, bug_report, fix_verify) {
   want <- function(m) m %in% modes
-  fix <- if (want("fix")) {
-    list(code = raw$fix_code, rationale = raw$fix_rationale,
-         verified = if (is.null(fix_verify)) NA else fix_verify$verified,
-         verification = if (is.null(fix_verify)) NA_character_ else fix_verify$verification)
-  } else NULL
+  if (want("fix")) {
+    fix <- list(code = raw$fix_code, rationale = raw$fix_rationale,
+                verified = if (is.null(fix_verify)) NA else fix_verify$verified,
+                verification = if (is.null(fix_verify)) NA_character_ else fix_verify$verification)
+  } else {
+    fix <- NULL
+  }
   structure(list(
     explanation = if (want("explain")) raw$explanation else NULL,
     diagnosis = if (want("diagnose")) list(category = raw$diagnosis_category,
@@ -35,8 +37,7 @@ print.minex_explanation <- function(x, ...) {
     cat("WHY IT FAILS\n  ", x$explanation, "\n\n", sep = "")
   }
   if (!is.null(x$fix)) {
-    tag <- if (isTRUE(x$fix$verified)) "verified" else
-           if (isFALSE(x$fix$verified)) "NOT verified" else "unverified"
+    tag <- if (isTRUE(x$fix$verified)) "verified" else if (isFALSE(x$fix$verified)) "NOT verified" else "unverified"
     cat(sprintf("FIX  (%s: %s)\n  %s\n\n", tag,
                 if (is.na(x$fix$verification)) "" else x$fix$verification,
                 x$fix$code))
@@ -45,7 +46,7 @@ print.minex_explanation <- function(x, ...) {
     cat(sprintf("TYPE\n  %s / %s\n\n", x$diagnosis$category, x$diagnosis$concept))
   }
   if (!is.null(x$bug_report)) {
-    cat("BUG REPORT\n"); cat(x$bug_report, "\n")
+    cat("BUG REPORT\n", x$bug_report, "\n", sep = "")
   }
   invisible(x)
 }

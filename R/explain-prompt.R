@@ -13,7 +13,7 @@ explanation_type <- function() {
     diagnosis_concept = ellmer::type_string(
       "The R concept involved, e.g. 'missing-value handling'."),
     diagnosis_severity = ellmer::type_string(
-      "One of 'error', 'warning', 'message'.")
+      "One of 'error', 'warning', 'message'."),
   )
 }
 
