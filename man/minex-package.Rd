@@ -16,12 +16,12 @@ Useful links:
 
 }
 \author{
-\strong{Maintainer}: Sandeep Bodduluri \email{sbodduluri@uabmc.edu} (\href{https://orcid.org/0000-0001-8201-5262}{ORCID}) [copyright holder]
+\strong{Maintainer}: Sumanth Chandrupatla \email{srchandr@uab.edu} (\href{https://orcid.org/0000-0001-9522-4020}{ORCID}) [copyright holder]
 
 Authors:
 \itemize{
+  \item Sumanth Chandrupatla \email{srchandr@uab.edu} (\href{https://orcid.org/0000-0001-9522-4020}{ORCID}) [copyright holder]
   \item Sandeep Bodduluri \email{sbodduluri@uabmc.edu} (\href{https://orcid.org/0000-0001-8201-5262}{ORCID}) [copyright holder]
-  \item Sumanth Chandrupatla \email{srchandr@uab.edu} [copyright holder]
 }
 
 }
