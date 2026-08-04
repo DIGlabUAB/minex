@@ -8,6 +8,11 @@
 * `minex(granularity = "expression")` reduces *within* a statement, isolating
   a failing pipeline stage (`|>`/`%>%`) or positional call argument via
   Hierarchical Delta Debugging (HDD*). The default `"statement"` is unchanged.
+* Input that does not parse now raises a classed condition,
+  `c("minex_parse_error", "minex_error")`, preserving R's parser diagnostic in
+  both the message and a `parse_error` field. Callers that feed `minex()`
+  machine-generated code can branch on the class rather than matching against
+  the text of a parser message.
 * The result gains `n_chars_original` and `n_chars_minimal` (character counts
   of the code before and after reduction) and a `granularity` field recording
   which mode produced the result.

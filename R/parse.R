@@ -11,7 +11,25 @@
 #' @noRd
 split_statements <- function(code) {
   text <- paste(code, collapse = "\n")
-  exprs <- parse(text = text, keep.source = TRUE)
+  exprs <- tryCatch(
+    parse(text = text, keep.source = TRUE),
+    error = function(e) {
+      # "Does not parse" is a documented boundary of the tool rather than
+      # an internal failure, so it is raised as a catchable classed
+      # condition. Callers that feed minex generated code -- where a large
+      # share of inputs do not parse -- can branch on the class.
+      stop(errorCondition(
+        message = paste0(
+          "minex requires a parseable script, but parsing failed:\n  ",
+          conditionMessage(e), "\n",
+          "minex localises runtime failures by bisection; a syntax error ",
+          "has no runtime\n  failure to localise. Fix the syntax error first."
+        ),
+        parse_error = conditionMessage(e),
+        class = c("minex_parse_error", "minex_error")
+      ))
+    }
+  )
   srcref <- attr(exprs, "srcref")
 
   if (is.null(srcref) || length(srcref) == 0L) {
