@@ -6,6 +6,12 @@
 #' the form requested when reporting bugs or asking for help, and the part of
 #' preparing such an example that is usually done by hand.
 #'
+#' When no subset of the top-level statements can be removed -- the usual case
+#' when the failure is nested inside a function body -- `minex()` continues
+#' *within* the surviving statements instead of returning the input unchanged,
+#' so the reduced code is then a simplification of the original statements
+#' rather than a subset of them. See `granularity`.
+#'
 #' By default `minex()` first runs the whole input to record the failure it
 #' produces (its condition message and class), then uses [ddmin()] to search for
 #' a minimal subset that reproduces it. Each candidate is evaluated in a separate
@@ -62,15 +68,29 @@
 #'   reduction stops early with a warning; the result still reproduces the
 #'   failure but may not be one-minimal. The one-time failure-point truncation
 #'   probe is mandatory setup, exempt from this limit, but is still included in
-#'   the reported `oracle_calls`.
+#'   the reported `oracle_calls`. The budget bounds the whole call: when the
+#'   statement pass escalates to `"expression"` (see `granularity`), the second
+#'   pass runs on whatever the first left rather than on a fresh budget.
 #' @param granularity `"statement"` (the default) reduces only at the level of
-#'   top-level statements, matching 0.2.0 behavior exactly. `"expression"`
+#'   top-level statements. `"expression"`
 #'   additionally reduces *within* each surviving statement via HDD (hierarchical
 #'   delta debugging): pipeline stages (`|>`, magrittr `%>%`) and positional call
 #'   arguments can be dropped from a statement as long as the whole kept set
 #'   still reproduces the target failure. When such a reduction makes an earlier
 #'   statement redundant (for example a value dropped from a later call), that
 #'   statement is swept out, so the result stays statement one-minimal.
+#'
+#'   When `granularity` is left at its default *and* statement-level reduction
+#'   removes nothing, `minex()` retries once at `"expression"` rather than
+#'   returning the input unchanged. This is the common case for a script that is
+#'   one function definition plus a call, where every top-level statement is
+#'   load-bearing but the failure is nested inside the function body. The
+#'   retried result carries `escalated_from = "statement"`, and its `code` is a
+#'   simplification of the original statements rather than a subset of them.
+#'   Passing `granularity = "statement"` explicitly suppresses the retry and
+#'   reduces at statement level only. No retry happens when the statement pass
+#'   stopped early against `max_oracle_calls`, since it has not then shown that
+#'   nothing is removable.
 #' @param verbose Logical. If `TRUE`, report progress. If `"trace"`, also
 #'   populate the result's `trace` with a per-oracle-call record. For
 #'   `granularity = "expression"`, the HDD trace rows additionally carry `stmt_index`
@@ -86,6 +106,12 @@
 #'   evaluation, including the failure-point truncation probe), the recorded
 #'   `target` failure (or `NULL` for a custom oracle), the `granularity` setting
 #'   used, and the `match` and `backend` settings.
+#'
+#'   When the statement pass escalated to `"expression"`, the result also carries
+#'   `escalated_from = "statement"` and `coarse_oracle_calls`, the share of
+#'   `oracle_calls` spent on the discarded statement-level pass. Both are absent
+#'   otherwise, so `is.null(res$escalated_from)` distinguishes a result that was
+#'   reduced at the granularity asked for from one that had to descend.
 #'
 #' @seealso [ddmin()] for the underlying algorithm and [reduce_rows()] for
 #'   reducing data frames.
@@ -135,6 +161,14 @@ minex <- function(file = NULL,
   if (!is.function(match)) match <- match.arg(match)
   algorithm <- match.arg(algorithm)
   backend   <- match.arg(backend)
+  # Recorded before match.arg() overwrites the argument, so an explicitly
+  # requested granularity is never silently overridden.
+  .auto_escalate <- missing(granularity)
+  # The caller's oracle, captured before the default one is constructed
+  # below. A re-run must not inherit the generated closure: `target` is only
+  # computed when `oracle` is NULL, and the generated closure also captures
+  # the coarse pass's context.
+  .user_oracle <- oracle
   granularity <- match.arg(granularity)
 
   # Input precedence: code > clipboard > file; warn on multi-source.
@@ -318,7 +352,7 @@ minex <- function(file = NULL,
     trace_out <- info$trace
   }
 
-  structure(
+  .result <- structure(
     list(code = code_out, original = statements_full,
          n_original = length(statements_full), n_minimal = length(code_out),
          oracle_calls = running, target = target, match = match,
@@ -329,4 +363,37 @@ minex <- function(file = NULL,
          n_chars_minimal = nchar(paste(code_out, collapse = "\n"))),
     class = "minex_result"
   )
+
+  # Statement-level bisection cannot reach a failure nested inside a
+  # function body. When the coarse pass removes nothing and the caller did
+  # not ask for a specific granularity, descend rather than return a null
+  # result. The recursive call passes granularity explicitly, so it cannot
+  # escalate again.
+  #
+  # `max_oracle_calls` bounds the call, not the pass, so the fine pass runs
+  # on what the coarse one left. Charging the whole coarse count (including
+  # its exempt truncation probe) errs toward spending less than the bound.
+  budget_left <- if (is.finite(max_oracle_calls)) {
+    max_oracle_calls - .result$oracle_calls
+  } else {
+    Inf
+  }
+  # A coarse pass that removed nothing because it ran out of calls has not
+  # established that nothing is removable, so it is not grounds to descend.
+  if (isTRUE(.auto_escalate) && identical(granularity, "statement") &&
+      isTRUE(.result$complete) && .result$n_minimal >= .result$n_original &&
+      budget_left >= 1) {
+    .fine <- minex(code = code, oracle = .user_oracle, condition = condition,
+                   match = match, algorithm = algorithm, backend = backend,
+                   timeout = timeout, max_oracle_calls = budget_left,
+                   verbose = verbose, granularity = "expression")
+    .fine$escalated_from <- "statement"
+    .fine$coarse_oracle_calls <- .result$oracle_calls
+    # Report what the call cost, not what the surviving pass cost, and the
+    # bound the caller actually set rather than the remainder handed down.
+    .fine$oracle_calls <- .fine$oracle_calls + .result$oracle_calls
+    .fine$max_oracle_calls <- max_oracle_calls
+    return(.fine)
+  }
+  .result
 }

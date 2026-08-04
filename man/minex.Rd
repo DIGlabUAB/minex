@@ -73,7 +73,9 @@ pass when \code{granularity = "expression"}). When the budget is exhausted the
 reduction stops early with a warning; the result still reproduces the
 failure but may not be one-minimal. The one-time failure-point truncation
 probe is mandatory setup, exempt from this limit, but is still included in
-the reported \code{oracle_calls}.}
+the reported \code{oracle_calls}. The budget bounds the whole call: when the
+statement pass escalates to \code{"expression"} (see \code{granularity}), the second
+pass runs on whatever the first left rather than on a fresh budget.}
 
 \item{verbose}{Logical. If \code{TRUE}, report progress. If \code{"trace"}, also
 populate the result's \code{trace} with a per-oracle-call record. For
@@ -83,13 +85,25 @@ statement-level rows have \code{NA} in both. For \code{granularity = "statement"
 the trace is unchanged from 0.2.0 (no \code{stmt_index}/\code{level} columns).}
 
 \item{granularity}{\code{"statement"} (the default) reduces only at the level of
-top-level statements, matching 0.2.0 behavior exactly. \code{"expression"}
+top-level statements. \code{"expression"}
 additionally reduces \emph{within} each surviving statement via HDD (hierarchical
 delta debugging): pipeline stages (\verb{|>}, magrittr \verb{\%>\%}) and positional call
 arguments can be dropped from a statement as long as the whole kept set
 still reproduces the target failure. When such a reduction makes an earlier
 statement redundant (for example a value dropped from a later call), that
-statement is swept out, so the result stays statement one-minimal.}
+statement is swept out, so the result stays statement one-minimal.
+
+When \code{granularity} is left at its default \emph{and} statement-level reduction
+removes nothing, \code{minex()} retries once at \code{"expression"} rather than
+returning the input unchanged. This is the common case for a script that is
+one function definition plus a call, where every top-level statement is
+load-bearing but the failure is nested inside the function body. The
+retried result carries \code{escalated_from = "statement"}, and its \code{code} is a
+simplification of the original statements rather than a subset of them.
+Passing \code{granularity = "statement"} explicitly suppresses the retry and
+reduces at statement level only. No retry happens when the statement pass
+stopped early against \code{max_oracle_calls}, since it has not then shown that
+nothing is removable.}
 }
 \value{
 An object of class \code{"minex_result"}: a list with the minimized \code{code}
@@ -100,6 +114,12 @@ before and after reduction), the number of \code{oracle_calls} (every predicate
 evaluation, including the failure-point truncation probe), the recorded
 \code{target} failure (or \code{NULL} for a custom oracle), the \code{granularity} setting
 used, and the \code{match} and \code{backend} settings.
+
+When the statement pass escalated to \code{"expression"}, the result also carries
+\code{escalated_from = "statement"} and \code{coarse_oracle_calls}, the share of
+\code{oracle_calls} spent on the discarded statement-level pass. Both are absent
+otherwise, so \code{is.null(res$escalated_from)} distinguishes a result that was
+reduced at the granularity asked for from one that had to descend.
 }
 \description{
 Reduces a failing piece of R code to the smallest subset of its top-level
@@ -109,6 +129,12 @@ the form requested when reporting bugs or asking for help, and the part of
 preparing such an example that is usually done by hand.
 }
 \details{
+When no subset of the top-level statements can be removed -- the usual case
+when the failure is nested inside a function body -- \code{minex()} continues
+\emph{within} the surviving statements instead of returning the input unchanged,
+so the reduced code is then a simplification of the original statements
+rather than a subset of them. See \code{granularity}.
+
 By default \code{minex()} first runs the whole input to record the failure it
 produces (its condition message and class), then uses \code{\link[=ddmin]{ddmin()}} to search for
 a minimal subset that reproduces it. Each candidate is evaluated in a separate

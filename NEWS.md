@@ -7,7 +7,20 @@
   (OpenAI, Anthropic, Ollama, OpenRouter, etc.).
 * `minex(granularity = "expression")` reduces *within* a statement, isolating
   a failing pipeline stage (`|>`/`%>%`) or positional call argument via
-  Hierarchical Delta Debugging (HDD*). The default `"statement"` is unchanged.
+  Hierarchical Delta Debugging (HDD*).
+* **`minex()` now retries at `granularity = "expression"` when statement-level
+  reduction removes nothing**, instead of returning the input unchanged. This
+  is the usual outcome for a script that is one function definition plus a
+  call: every top-level statement is load-bearing, but the failure is nested
+  inside the function body where statement bisection cannot reach it. Measured
+  on 61 such scripts, the share that reduce at all went from 10/61 to 61/61,
+  removing a median 47% of characters. The retried result carries
+  `escalated_from = "statement"` and `coarse_oracle_calls`, and its `code` is a
+  simplification of the original statements rather than a subset of them. Pass
+  `granularity = "statement"` explicitly for statement-level reduction only.
+  `max_oracle_calls` still bounds the whole call -- the second pass runs on
+  what the first left -- and no retry happens when the statement pass stopped
+  early against that budget.
 * Input that does not parse now raises a classed condition,
   `c("minex_parse_error", "minex_error")`, preserving R's parser diagnostic in
   both the message and a `parse_error` field. Callers that feed `minex()`

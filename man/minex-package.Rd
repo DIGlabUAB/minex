@@ -5,7 +5,7 @@
 \alias{minex-package}
 \title{minex: Automatically Reduce Failing R Scripts to a Minimal Reproducible Example}
 \description{
-Shrinks a failing R script to the smallest subset of statements that still triggers the same error, using the delta debugging algorithm of Zeller and Hildebrandt (2002) \doi{10.1109/32.988498}. Each candidate reduction is evaluated in a separate R process, so dependencies between statements and their side effects are respected. The result is a one-minimal example, in which removing any remaining statement makes the error disappear; this is the form most useful for bug reports and for questions on community forums. A general delta debugging routine and a helper for reducing data frames to the rows that reproduce a failure are also provided.
+Shrinks a failing R script to the smallest subset of statements that still triggers the same error, using the delta debugging algorithm of Zeller and Hildebrandt (2002) \doi{10.1109/32.988498}. Each candidate reduction is evaluated in a separate R process, so dependencies between statements and their side effects are respected. The result is a one-minimal example, in which removing any remaining statement makes the error disappear; this is the form most useful for bug reports and for questions on community forums. When no statement can be removed, because the failure is nested inside a function body, reduction continues within the surviving statements. A general delta debugging routine and a helper for reducing data frames to the rows that reproduce a failure are also provided.
 }
 \seealso{
 Useful links:
