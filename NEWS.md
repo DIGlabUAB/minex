@@ -26,6 +26,11 @@
   both the message and a `parse_error` field. Callers that feed `minex()`
   machine-generated code can branch on the class rather than matching against
   the text of a parser message.
+* `print()` on a result leads with whichever axis actually moved. A run that
+  removed characters but no whole statements previously headlined
+  "3 statement(s) reduced to 3", reporting a successful reduction as a
+  failure. When nothing moved at statement granularity, the note now names
+  `granularity = "expression"`.
 * The result gains `n_chars_original` and `n_chars_minimal` (character counts
   of the code before and after reduction) and a `granularity` field recording
   which mode produced the result.
