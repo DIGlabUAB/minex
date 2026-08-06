@@ -182,12 +182,12 @@ test_that("granularity='expression' reduces inside a pipeline", {
   expect_false(grepl("rev(", as.character(res), fixed = TRUE))
 })
 
-test_that("granularity='statement' (default) is unchanged from 0.2.0", {
+test_that("granularity='statement' (default) keeps statement-level behaviour", {
   script <- c("a <- 1", "b <- 2", "log('not a number')")
   res <- minex(code = script, backend = "inprocess")
   expect_equal(res$n_minimal, 1L)
   expect_match(as.character(res), "log")
-  # Additive 0.3.0 fields must not perturb the statement-granularity path.
+  # Additive result fields must not perturb the statement-granularity path.
   expect_equal(res$granularity, "statement")
   expect_type(res$n_chars_original, "integer")
   expect_type(res$n_chars_minimal, "integer")
