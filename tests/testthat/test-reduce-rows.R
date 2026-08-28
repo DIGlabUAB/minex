@@ -31,3 +31,17 @@ test_that("reduce_rows returns empty input unchanged", {
   df <- data.frame(x = numeric(0))
   expect_equal(reduce_rows(df, function(d) TRUE), df)
 })
+
+test_that("reduce_rows accepts an algorithm argument", {
+  df <- data.frame(id = 1:6, value = c(3, 8, 999, 2, 5, 7))
+  out <- reduce_rows(df, function(d) any(d$value > 100), algorithm = "ddmin")
+  expect_equal(nrow(out), 1L)
+  expect_equal(out$value, 999)
+})
+
+test_that("reduce_rows returns a clean data frame (no leaked attributes)", {
+  df <- data.frame(id = 1:6, value = c(3, 8, 999, 2, 5, 7))
+  out <- reduce_rows(df, function(d) any(d$value > 100))
+  expect_null(attr(out, "oracle_calls"))
+  expect_null(attr(out, "complete"))
+})

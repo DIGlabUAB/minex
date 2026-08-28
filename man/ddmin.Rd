@@ -4,7 +4,14 @@
 \alias{ddmin}
 \title{Delta debugging}
 \usage{
-ddmin(items, interesting, verbose = FALSE)
+ddmin(
+  items,
+  interesting,
+  algorithm = c("cdd", "ddmin"),
+  max_oracle_calls = Inf,
+  verbose = FALSE,
+  .info = NULL
+)
 }
 \arguments{
 \item{items}{A list or atomic vector of elements to minimize.}
@@ -13,8 +20,25 @@ ddmin(items, interesting, verbose = FALSE)
 form as \code{items}, returning a single logical. It should return \code{TRUE} when
 the subset still reproduces the behavior of interest.}
 
-\item{verbose}{Logical. If \code{TRUE}, report each reduction step via
-\code{\link[=message]{message()}}.}
+\item{algorithm}{Character. The reduction strategy for the first phase, one
+of \code{"cdd"} (convergent delta debugging, the default) or \code{"ddmin"} (the
+classic block-halving loop). Both are followed by a verification sweep that
+removes any remaining removable single elements.}
+
+\item{max_oracle_calls}{Numeric. An upper bound on the number of predicate
+evaluations. Must be at least 1. When the budget is exhausted the reduction
+stops early and returns the smallest set confirmed so far; the result is
+still guaranteed to reproduce the behavior but may not be one-minimal.}
+
+\item{verbose}{Logical or character. If \code{TRUE}, report each reduction phase
+via \code{\link[=message]{message()}}. If \code{"trace"}, additionally record a per-call trace in
+\code{.info$trace}.}
+
+\item{.info}{Optional environment. When supplied, \code{ddmin()} populates it with
+\code{oracle_calls} (the number of predicate evaluations), \code{complete} (whether
+the reduction finished within budget), and \code{trace} (a data frame when
+\code{verbose = "trace"}, otherwise \code{NULL}). Metadata flows only through this
+environment; the returned value itself carries no attributes.}
 }
 \value{
 The one-minimal subset of \code{items}, in the original order.
@@ -50,6 +74,10 @@ ddmin(nums, function(s) sum(s) >= 11 && 6 \%in\% s)
 Zeller A, Hildebrandt R (2002). "Simplifying and Isolating Failure-Inducing
 Input." \emph{IEEE Transactions on Software Engineering}, 28(2), 183-200.
 \doi{10.1109/32.988498}
+
+Zhang M, Xu Z, Tian Y, Cheng X, Sun C (2025). "Toward a Better Understanding
+of Probabilistic Delta Debugging." ICSE 2025. arXiv:2408.04735.
+\url{https://arxiv.org/abs/2408.04735}
 }
 \seealso{
 \code{\link[=minex]{minex()}} for the script-reduction front end and \code{\link[=reduce_rows]{reduce_rows()}} for

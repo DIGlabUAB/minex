@@ -10,6 +10,10 @@
 #' @param predicate A function taking a data frame (a subset of `data`'s rows)
 #'   and returning a single logical: `TRUE` when the subset still reproduces the
 #'   failure of interest.
+#' @param algorithm Character. The reduction strategy for the first phase, one
+#'   of `"cdd"` (default) or `"ddmin"`. Passed through to [ddmin()].
+#' @param max_oracle_calls Numeric. An upper bound on the number of predicate
+#'   calls. Passed through to [ddmin()].
 #' @param verbose Logical. If `TRUE`, report progress.
 #'
 #' @return A data frame containing the one-minimal subset of rows.
@@ -21,7 +25,11 @@
 #' # The failure: any value greater than 100.
 #' reduce_rows(df, function(d) any(d$value > 100))
 #' @export
-reduce_rows <- function(data, predicate, verbose = FALSE) {
+reduce_rows <- function(data, predicate,
+                        algorithm = c("cdd", "ddmin"),
+                        max_oracle_calls = Inf,
+                        verbose = FALSE) {
+  algorithm <- match.arg(algorithm)
   if (!is.data.frame(data)) {
     stop("`data` must be a data frame.", call. = FALSE)
   }
@@ -39,7 +47,7 @@ reduce_rows <- function(data, predicate, verbose = FALSE) {
   keep <- ddmin(
     seq_len(nrow(data)),
     function(rows) isTRUE(predicate(data[sort(rows), , drop = FALSE])),
-    verbose = verbose
+    algorithm = algorithm, max_oracle_calls = max_oracle_calls, verbose = verbose
   )
 
   data[sort(keep), , drop = FALSE]

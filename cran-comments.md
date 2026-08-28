@@ -1,19 +1,43 @@
+## Resubmission
+
+This is a resubmission. minex 0.1.0 is already published on CRAN (2026-07-16).
+This submission is minex 0.2.0, a feature release: not a new package.
+
+## Change of maintainer
+
+The maintainer (`cre`) changes in this release, from Sandeep Bodduluri
+(`sbodduluri@uabmc.edu`, the 0.1.0 maintainer) to Sumanth Chandrupatla
+(`srchandr@uab.edu`). Sandeep Bodduluri remains an author (`aut`) and
+copyright holder (`cph`); no contributor has been removed.
+
+<!-- DO NOT SUBMIT until the line below is true, then delete this comment.
+     CRAN will hold any submission that changes the Maintainer field until
+     the OUTGOING maintainer confirms the handover directly to CRAN. -->
+The outgoing maintainer, Sandeep Bodduluri, has confirmed this handover to
+CRAN by separate email.
+
 ## R CMD check results
 
-0 errors | 0 warnings | 1 note
-
-* This is a new submission, so R CMD check reports one NOTE flagging it as a
-  new submission. There are no other notes.
+Local `R CMD check --as-cran`: 0 errors | 0 warnings | 0 notes.
 
 ## Test environments
 
-* local macOS, R 4.4.2 -- `R CMD check --as-cran`: OK
-* win-builder, R-devel (2026-07-07 r90210) -- 1 NOTE (new submission)
-* GitHub Actions -- `R CMD check` passing on:
-  * Windows (release)
-  * macOS (release)
-  * Ubuntu (devel, release, oldrel-1)
+* local -- macOS 15 (aarch64-apple-darwin20), R 4.5.2: OK
+
+Multi-platform checks (win-builder R-devel/release and the GitHub Actions
+matrix: Windows release, macOS release, Ubuntu devel/release/oldrel-1) are to
+be run by the maintainer immediately before submission and are not yet
+reflected here.
 
 ## Notes
 
-This is a new submission.
+* `clipr` is a new `Suggests` dependency, used only for the optional
+  `minex(clipboard = TRUE)` input source; it is guarded by
+  `requireNamespace()` and the example that exercises it is wrapped in
+  `\dontrun{}`.
+* `ellmer` is a new `Suggests` dependency, used only by the optional
+  `explain_failure()` helper, which sends a reduced example to a
+  user-configured LLM. It is guarded by `requireNamespace()`, requires the
+  user to supply their own chat object, and performs no network access at
+  check time: every example and test that touches it is either skipped when
+  no chat is configured or wrapped in `\dontrun{}`.

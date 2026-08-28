@@ -50,3 +50,80 @@ test_that("ddmin does not re-evaluate identical configurations", {
   ddmin(c("the", "quick", "brown", "fox"), counting)
   expect_equal(calls, before)
 })
+
+test_that("ddmin return is a plain vector with no attributes", {
+  out <- ddmin(c("the", "quick", "brown", "fox"), function(s) "fox" %in% s)
+  expect_null(attributes(out))
+  expect_identical(out, "fox")
+})
+
+test_that("ddmin populates the .info environment", {
+  e <- new.env()
+  ddmin(1:6, function(s) 6 %in% s, .info = e)
+  expect_true(is.numeric(e$oracle_calls))
+  expect_true(isTRUE(e$complete))
+})
+
+test_that("cdd and ddmin algorithms agree: both one-minimal AND equal size", {
+  set.seed(NULL)
+  interesting <- function(s) 4L %in% s
+  a <- ddmin(1:9, interesting, algorithm = "cdd")
+  b <- ddmin(1:9, interesting, algorithm = "ddmin")
+  is_one_minimal <- function(x) all(vapply(seq_along(x),
+    function(i) !isTRUE(interesting(x[-i])), logical(1)))
+  expect_true(is_one_minimal(a))
+  expect_true(is_one_minimal(b))
+  expect_equal(length(a), length(b))
+})
+
+test_that("budget exhaustion sets complete = FALSE and still reproduces", {
+  e <- new.env()
+  interesting <- function(s) all(c(2L, 8L) %in% s)
+  out <- ddmin(1:10, interesting, max_oracle_calls = 3L, .info = e)
+  expect_false(e$complete)
+  expect_true(isTRUE(interesting(out)))   # never returns an unverified set
+})
+
+test_that("budget exhaustion mid-reduce returns the smallest CONFIRMED set, not the full input", {
+  # The docs promise the smallest set confirmed so far when the budget runs out.
+  # With classic ddmin on 1:100 needing only element 50, several block reductions
+  # are committed (1:50 -> 26:50 ...) before the 5-call budget trips mid-reduce.
+  # The confirmed reduction must survive the unwind rather than being discarded
+  # back to the full 100-element input.
+  e <- new.env()
+  out <- ddmin(1:100, function(s) 50L %in% s,
+               algorithm = "ddmin", max_oracle_calls = 5L, .info = e)
+  expect_false(e$complete)
+  expect_true(50L %in% out)          # soundness: still reproduces
+  expect_lt(length(out), 100L)       # progress preserved, not reset to full
+})
+
+test_that("max_oracle_calls < 1 errors rather than returning unverified", {
+  expect_error(
+    ddmin(1:5, function(s) length(s) > 0, max_oracle_calls = 0L),
+    "max_oracle_calls"
+  )
+})
+
+test_that("verbose = 'trace' populates a trace data frame with phase labels", {
+  e <- new.env()
+  ddmin(1:6, function(s) 6 %in% s, verbose = "trace", .info = e)
+  expect_s3_class(e$trace, "data.frame")
+  expect_true(all(c("call","phase","size","kept","cached","event") %in%
+                    names(e$trace)))
+  expect_true(all(e$trace$phase %in% c("reduce", "verify")))
+})
+
+test_that("verbose = 'trace' marks the budget-exhausted row", {
+  e <- new.env()
+  ddmin(1:10, function(s) all(c(2L, 8L) %in% s),
+        max_oracle_calls = 3L, verbose = "trace", .info = e)
+  expect_true("budget_exhausted" %in% e$trace$event)
+})
+
+test_that("verbose = TRUE emits phase messages", {
+  expect_message(
+    ddmin(1:6, function(s) 6 %in% s, verbose = TRUE),
+    "reduce phase"
+  )
+})

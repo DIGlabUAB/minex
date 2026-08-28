@@ -1,76 +1,76 @@
-#' Run a code fragment and capture whether it errors
-#'
-#' @param code Character vector of R statements.
-#' @param backend Either `"callr"` (evaluate in a fresh R process, the default)
-#'   or `"inprocess"` (evaluate in a new environment in the current session).
-#' @param timeout Maximum seconds to allow a `callr` evaluation to run.
-#' @return A list with elements `error` (logical), `message` (character or `NA`)
-#'   and `classes` (the condition's class vector, excluding `"condition"`).
 #' @keywords internal
 #' @noRd
 run_code <- function(code, backend = c("callr", "inprocess"), timeout = 60) {
   backend <- match.arg(backend)
-  src <- paste(code, collapse = "\n")
+  statements <- code
 
-  runner <- function(src) {
-    tryCatch(
-      {
-        eval(parse(text = src), envir = new.env(parent = globalenv()))
-        list(error = FALSE, message = NA_character_, classes = character(0))
-      },
-      error = function(e) {
+  runner <- function(statements) {
+    env <- new.env(parent = globalenv())
+    conditions <- list()
+    promoted_msgs <- character(0) # messages already recorded via warn=2 promotion
+    current <- 0L
+
+    record <- function(cond, type) {
+      conditions[[length(conditions) + 1L]] <<-
         list(
-          error = TRUE,
-          message = conditionMessage(e),
-          classes = setdiff(class(e), "condition")
+          type       = type,
+          message    = sub("\n$", "", conditionMessage(cond)),
+          classes    = setdiff(class(cond), "condition"),
+          stmt_index = as.integer(current)
         )
+    }
+
+    withCallingHandlers(
+      tryCatch(
+        for (i in seq_along(statements)) {
+          current <- i
+          eval(parse(text = statements[[i]])[[1]], envir = env)
+        },
+        error = function(e) {
+          # Under warn>=2 a warning is promoted to an error whose message is the
+          # warning text with a "(converted from warning) " prefix; the warning
+          # handler already recorded it, so skip that duplicate (a class-stripped
+          # re-entry). Match on the message rather than the statement index: a
+          # single top-level statement (e.g. a `{...}` block) may recover the
+          # promotion via its own tryCatch and then raise a genuinely different
+          # error, which shares the index but not the message and must be kept.
+          em <- conditionMessage(e)
+          is_promotion_dup <- any(vapply(
+            promoted_msgs, function(m) nzchar(m) && endsWith(em, m), logical(1)))
+          if (!is_promotion_dup) record(e, "error")
+        }
+      ),
+      warning = function(w) {
+        if (getOption("warn") >= 2) {
+          # R will promote this to an error and halt; record it now, preserving
+          # the original warning classes, and let promotion proceed (no muffle).
+          record(w, "error")
+          promoted_msgs <<- c(promoted_msgs, conditionMessage(w))
+        } else {
+          record(w, "warning")
+          invokeRestart("muffleWarning")
+        }
+      },
+      message = function(m) {
+        if (!inherits(m, "packageStartupMessage")) record(m, "message")
+        invokeRestart("muffleMessage")
       }
     )
+    list(observed = TRUE, conditions = conditions)
   }
 
   if (backend == "inprocess") {
-    return(runner(src))
+    # A script may call options()/set.seed()/etc.; isolate global state so it
+    # cannot leak into the caller's session (new.env does NOT isolate options).
+    old_opts <- options()
+    on.exit(options(old_opts), add = TRUE)
+    return(runner(statements))
   }
 
-  # In a separate process a timeout or a hard crash means we could not observe
-  # the target error, so the fragment is treated as not reproducing it.
+  # In a separate process, a timeout or hard crash means we could not observe
+  # the run: observed = FALSE (distinct from "ran cleanly").
   tryCatch(
-    callr::r(runner, args = list(src = src), timeout = timeout),
-    error = function(e) {
-      list(error = FALSE, message = NA_character_, classes = character(0))
-    }
+    callr::r(runner, args = list(statements = statements), timeout = timeout),
+    error = function(e) list(observed = FALSE, conditions = list())
   )
-}
-
-#' Build an oracle that matches a captured target failure
-#'
-#' @param target A captured failure, as returned by [run_code()].
-#' @param match How a candidate's failure must match the target: `"message"`
-#'   (identical condition message, the default), `"class"` (shares at least one
-#'   condition class) or `"both"`.
-#' @inheritParams run_code
-#' @return A predicate suitable for [ddmin()]: it takes a character vector of
-#'   statements and returns `TRUE` when they reproduce the target failure.
-#' @keywords internal
-#' @noRd
-make_target_oracle <- function(target,
-                               match = c("message", "class", "both"),
-                               backend = "callr",
-                               timeout = 60) {
-  match <- match.arg(match)
-  force(target)
-
-  function(code) {
-    result <- run_code(code, backend = backend, timeout = timeout)
-    if (!isTRUE(result$error)) {
-      return(FALSE)
-    }
-    message_ok <- identical(result$message, target$message)
-    class_ok <- length(intersect(result$classes, target$classes)) > 0L
-    switch(match,
-      message = message_ok,
-      class = class_ok,
-      both = message_ok && class_ok
-    )
-  }
 }

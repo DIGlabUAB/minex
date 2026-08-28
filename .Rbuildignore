@@ -1,8 +1,13 @@
 ^README\.Rmd$
 ^cran-comments\.md$
+^docs$
+^bench$
 ^LICENSE\.md$
 ^\.github$
 ^\.git$
+^\.superpowers$
+^\.claude$
 ^\.gitignore$
 ^.*\.Rproj$
 ^\.Rproj\.user$
+^\.lintr$

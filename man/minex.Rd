@@ -7,45 +7,119 @@
 minex(
   file = NULL,
   code = NULL,
+  clipboard = FALSE,
   oracle = NULL,
+  condition = c("error", "warning", "message", "any"),
   match = c("message", "class", "both"),
+  algorithm = c("cdd", "ddmin"),
   backend = c("callr", "inprocess"),
   timeout = 60,
-  verbose = FALSE
+  max_oracle_calls = Inf,
+  verbose = FALSE,
+  granularity = c("statement", "expression")
 )
 }
 \arguments{
-\item{file}{Path to a file containing the R code to minimize. Ignored if
-\code{code} is supplied.}
+\item{file}{Path to a file containing the R code to minimize. Used only when
+neither \code{code} nor \code{clipboard} is supplied.}
 
 \item{code}{A character vector of R source lines, or a single string. Takes
-precedence over \code{file}.}
+precedence over both \code{clipboard} and \code{file}.}
+
+\item{clipboard}{Logical. If \code{TRUE}, read the R code to minimize from the
+system clipboard. Takes precedence over \code{file}, but is overridden by \code{code}.
+Input precedence is \verb{code > clipboard > file}; supplying more than one
+source emits a warning and the highest-precedence source is used.}
 
 \item{oracle}{Optional predicate taking a character vector of statements and
 returning a single logical. When supplied, the target failure is not
-recorded automatically and \code{match} is ignored; you are fully responsible for
-defining what counts as reproducing the failure.}
+recorded automatically and \code{condition}, \code{match} and failure-point truncation
+are all bypassed; you are fully responsible for defining what counts as
+reproducing the failure.}
+
+\item{condition}{Which kind of condition to target: \code{"error"} (the default),
+\code{"warning"}, \code{"message"}, or \code{"any"} (the most severe condition present,
+error > warning > message). Ignored when a custom \code{oracle} is supplied.}
 
 \item{match}{How a candidate's failure must match the recorded one when no
 \code{oracle} is given: \code{"message"} (identical message, the default), \code{"class"}
 (shares a condition class) or \code{"both"}. Matching on the message is usually
 right, because an over-reduced fragment tends to fail with a different
-message (for example "object not found").}
+message (for example "object not found"). Can also be a function taking
+two condition summaries, \code{candidate} and \code{target} (each a list with
+\code{message} and \code{classes}), and returning a single logical, for custom
+matching logic.}
+
+\item{algorithm}{The reduction strategy passed to \code{\link[=ddmin]{ddmin()}}: \code{"cdd"}
+(convergent delta debugging, the default) or \code{"ddmin"} (the classic
+block-halving loop).}
 
 \item{backend}{Either \code{"callr"} (evaluate each candidate in a fresh R process,
 the default and the only choice that fully isolates state) or \code{"inprocess"}
-(evaluate in the current session, faster but without isolation).}
+(evaluate in the current session, faster but without isolation; a script's
+side effects other than options are not sandboxed). \strong{Soundness caveat:}
+\code{"inprocess"} evaluates in an environment chained to the caller's global
+environment, so a candidate that references a name which happens to exist
+in the caller's workspace resolves it instead of raising \verb{object not found}. Over-reduction can therefore spuriously still "succeed" against
+that tripwire. \code{backend = "callr"} (the default) evaluates in a clean
+process and is unaffected; prefer \code{"inprocess"} only for trusted, quick
+iteration.}
 
 \item{timeout}{Maximum seconds allowed for a single \code{callr} evaluation.}
 
-\item{verbose}{Logical. If \code{TRUE}, report progress.}
+\item{max_oracle_calls}{Numeric upper bound on the number of oracle
+evaluations in the reduction search, passed to \code{\link[=ddmin]{ddmin()}} (and to the HDD
+pass when \code{granularity = "expression"}). When the budget is exhausted the
+reduction stops early with a warning; the result still reproduces the
+failure but may not be one-minimal. The one-time failure-point truncation
+probe is mandatory setup, exempt from this limit, but is still included in
+the reported \code{oracle_calls}. The budget bounds the whole call: when the
+statement pass escalates to \code{"expression"} (see \code{granularity}), the second
+pass runs on whatever the first left rather than on a fresh budget.}
+
+\item{verbose}{Logical. If \code{TRUE}, report progress. If \code{"trace"}, also
+populate the result's \code{trace} with a per-oracle-call record. For
+\code{granularity = "expression"}, the HDD trace rows additionally carry \code{stmt_index}
+(which statement they reduced) and \code{level} (the HDD tree depth); the
+statement-level rows have \code{NA} in both. For \code{granularity = "statement"}
+the trace is unchanged from 0.2.0 (no \code{stmt_index}/\code{level} columns).}
+
+\item{granularity}{\code{"statement"} (the default) reduces only at the level of
+top-level statements. \code{"expression"}
+additionally reduces \emph{within} each surviving statement via HDD (hierarchical
+delta debugging): pipeline stages (\verb{|>}, magrittr \verb{\%>\%}) and positional call
+arguments can be dropped from a statement as long as the whole kept set
+still reproduces the target failure. When such a reduction makes an earlier
+statement redundant (for example a value dropped from a later call), that
+statement is swept out, so the result stays statement one-minimal.
+
+When \code{granularity} is left at its default \emph{and} statement-level reduction
+removes nothing, \code{minex()} retries once at \code{"expression"} rather than
+returning the input unchanged. This is the common case for a script that is
+one function definition plus a call, where every top-level statement is
+load-bearing but the failure is nested inside the function body. The
+retried result carries \code{escalated_from = "statement"}, and its \code{code} is a
+simplification of the original statements rather than a subset of them.
+Passing \code{granularity = "statement"} explicitly suppresses the retry and
+reduces at statement level only. No retry happens when the statement pass
+stopped early against \code{max_oracle_calls}, since it has not then shown that
+nothing is removable.}
 }
 \value{
 An object of class \code{"minex_result"}: a list with the minimized \code{code}
 (a character vector of statements), the \code{original} statements, the statement
-counts \code{n_original} and \code{n_minimal}, the number of \code{oracle_calls}, the
-recorded \code{target} failure (or \code{NULL} for a custom oracle), and the \code{match}
-and \code{backend} settings.
+counts \code{n_original} and \code{n_minimal}, the character counts \code{n_chars_original}
+and \code{n_chars_minimal} (\code{nchar()} of the code collapsed to a single string,
+before and after reduction), the number of \code{oracle_calls} (every predicate
+evaluation, including the failure-point truncation probe), the recorded
+\code{target} failure (or \code{NULL} for a custom oracle), the \code{granularity} setting
+used, and the \code{match} and \code{backend} settings.
+
+When the statement pass escalated to \code{"expression"}, the result also carries
+\code{escalated_from = "statement"} and \code{coarse_oracle_calls}, the share of
+\code{oracle_calls} spent on the discarded statement-level pass. Both are absent
+otherwise, so \code{is.null(res$escalated_from)} distinguishes a result that was
+reduced at the granularity asked for from one that had to descend.
 }
 \description{
 Reduces a failing piece of R code to the smallest subset of its top-level
@@ -55,6 +129,12 @@ the form requested when reporting bugs or asking for help, and the part of
 preparing such an example that is usually done by hand.
 }
 \details{
+When no subset of the top-level statements can be removed -- the usual case
+when the failure is nested inside a function body -- \code{minex()} continues
+\emph{within} the surviving statements instead of returning the input unchanged,
+so the reduced code is then a simplification of the original statements
+rather than a subset of them. See \code{granularity}.
+
 By default \code{minex()} first runs the whole input to record the failure it
 produces (its condition message and class), then uses \code{\link[=ddmin]{ddmin()}} to search for
 a minimal subset that reproduces it. Each candidate is evaluated in a separate
@@ -88,6 +168,11 @@ minex(code = script2, backend = "inprocess")
 \donttest{
 # The default backend runs candidates in fresh R processes.
 minex(code = script)
+}
+
+\dontrun{
+# Reduce a failing script copied to the system clipboard:
+minex(clipboard = TRUE)
 }
 }
 \seealso{
