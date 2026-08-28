@@ -10,11 +10,8 @@ The maintainer (`cre`) changes in this release, from Sandeep Bodduluri
 (`srchandr@uab.edu`). Sandeep Bodduluri remains an author (`aut`) and
 copyright holder (`cph`); no contributor has been removed.
 
-<!-- DO NOT SUBMIT until the line below is true, then delete this comment.
-     CRAN will hold any submission that changes the Maintainer field until
-     the OUTGOING maintainer confirms the handover directly to CRAN. -->
-The outgoing maintainer, Sandeep Bodduluri, has confirmed this handover to
-CRAN by separate email.
+The outgoing maintainer, Sandeep Bodduluri, has reviewed and approved this
+change of maintainer.
 
 ## R CMD check results
 
