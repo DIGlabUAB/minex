@@ -23,6 +23,6 @@ test_that("build_prompt embeds code + error and frames code as data", {
 test_that("build_prompt honors session_info", {
   with <- build_prompt(fake_result(), c("report"), session_info = TRUE)
   without <- build_prompt(fake_result(), c("report"), session_info = FALSE)
-  expect_true(grepl("R version", with))
-  expect_false(grepl("R version", without))
+  expect_match(with, "Session info:", fixed = TRUE)
+  expect_false(grepl("Session info:", without, fixed = TRUE))
 })
