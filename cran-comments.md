@@ -1,7 +1,7 @@
-## Resubmission
+## Update
 
-This is a resubmission. minex 0.1.0 is already published on CRAN (2026-07-16).
-This submission is minex 0.2.0, a feature release: not a new package.
+This submission updates minex 0.1.0, published on CRAN on 2026-07-16, to
+version 0.2.0. This is a feature release, not a new package.
 
 ## Change of maintainer
 
@@ -15,16 +15,21 @@ change of maintainer.
 
 ## R CMD check results
 
-Local `R CMD check --as-cran`: 0 errors | 0 warnings | 0 notes.
+Local `R CMD check --as-cran`: 0 errors | 0 warnings | 1 note.
+
+* CRAN incoming feasibility identifies Sumanth Chandrupatla as the new
+  maintainer. This expected note is explained under "Change of maintainer"
+  above.
 
 ## Test environments
 
-* local -- macOS 15 (aarch64-apple-darwin20), R 4.5.2: OK
-
-Multi-platform checks (win-builder R-devel/release and the GitHub Actions
-matrix: Windows release, macOS release, Ubuntu devel/release/oldrel-1) are to
-be run by the maintainer immediately before submission and are not yet
-reflected here.
+* Local: macOS (aarch64-apple-darwin20), R 4.5.2: OK (one note explained
+  above)
+* GitHub Actions: macOS, R-release: OK
+* GitHub Actions: Windows, R-release: OK
+* GitHub Actions: Ubuntu, R-devel: OK
+* GitHub Actions: Ubuntu, R-release: OK
+* GitHub Actions: Ubuntu, R-oldrel-1: OK
 
 ## Notes
 
