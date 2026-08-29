@@ -15,18 +15,15 @@ change of maintainer.
 
 ## R CMD check results
 
-Local `R CMD check --as-cran`: 0 errors | 0 warnings | 2 notes.
+Local `R CMD check --as-cran`: 0 errors | 0 warnings | 1 note.
 
 * CRAN incoming feasibility identifies Sumanth Chandrupatla as the new
   maintainer. This expected note is explained under "Change of maintainer"
   above.
-* HTML manual validation was skipped because the locally installed HTML Tidy
-  is not recent enough. The PDF and HTML manuals were generated successfully,
-  and this local toolchain note did not occur in the GitHub Actions checks.
 
 ## Test environments
 
-* Local: macOS (aarch64-apple-darwin20), R 4.5.2: OK (two notes explained
+* Local: macOS (aarch64-apple-darwin20), R 4.5.2: OK (one note explained
   above)
 * GitHub Actions: macOS, R-release: OK
 * GitHub Actions: Windows, R-release: OK
