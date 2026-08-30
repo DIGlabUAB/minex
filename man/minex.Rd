@@ -35,7 +35,7 @@ source emits a warning and the highest-precedence source is used.}
 returning a single logical. When supplied, the target failure is not
 recorded automatically and \code{condition}, \code{match} and failure-point truncation
 are all bypassed; you are fully responsible for defining what counts as
-reproducing the failure.}
+reproducing the failure. Empty candidates are not tested.}
 
 \item{condition}{Which kind of condition to target: \code{"error"} (the default),
 \code{"warning"}, \code{"message"}, or \code{"any"} (the most severe condition present,
@@ -51,8 +51,8 @@ two condition summaries, \code{candidate} and \code{target} (each a list with
 matching logic.}
 
 \item{algorithm}{The reduction strategy passed to \code{\link[=ddmin]{ddmin()}}: \code{"cdd"}
-(Counter-Based Delta Debugging, the default) or \code{"ddmin"} (the classic
-block-halving loop).}
+(the default, adapted from Counter-Based Delta Debugging) or \code{"ddmin"} (the
+classic block-halving loop).}
 
 \item{backend}{Either \code{"callr"} (evaluate each candidate in a fresh R process,
 the default and the only choice that fully isolates state) or \code{"inprocess"}
@@ -86,12 +86,14 @@ the trace is unchanged from 0.2.0 (no \code{stmt_index}/\code{level} columns).}
 
 \item{granularity}{\code{"statement"} (the default) reduces only at the level of
 top-level statements. \code{"expression"}
-additionally reduces \emph{within} each surviving statement via HDD (hierarchical
-delta debugging): pipeline stages (\verb{|>}, magrittr \verb{\%>\%}) and positional call
-arguments can be dropped from a statement as long as the whole kept set
-still reproduces the target failure. When such a reduction makes an earlier
-statement redundant (for example a value dropped from a later call), that
-statement is swept out, so the result stays statement one-minimal.
+additionally reduces \emph{within} each surviving statement via a specialized
+HDD*-style pass based on hierarchical delta debugging: pipeline stages
+(\verb{|>}, magrittr \verb{\%>\%}) and positional call arguments can be dropped from a
+statement as long as the whole kept set still reproduces the target
+failure. This is not a general reducer over every R syntax-tree node. When
+such a reduction makes an earlier statement redundant (for example a value
+dropped from a later call), that statement is swept out, so the result stays
+statement one-minimal.
 
 When \code{granularity} is left at its default \emph{and} statement-level reduction
 removes nothing, \code{minex()} retries once at \code{"expression"} rather than
@@ -122,7 +124,7 @@ otherwise, so \code{is.null(res$escalated_from)} distinguishes a result that was
 reduced at the granularity asked for from one that had to descend.
 }
 \description{
-Reduces a failing piece of R code to the smallest subset of its top-level
+Reduces a failing piece of R code to a one-minimal subset of its top-level
 statements that still triggers the same failure. The result is a \emph{one-minimal}
 example: removing any remaining statement makes the failure disappear. This is
 the form requested when reporting bugs or asking for help, and the part of
@@ -137,14 +139,16 @@ rather than a subset of them. See \code{granularity}.
 
 By default \code{minex()} first runs the whole input to record the failure it
 produces (its condition message and class), then uses \code{\link[=ddmin]{ddmin()}} to search for
-a minimal subset that reproduces it. Each candidate is evaluated in a separate
-R process so that dependencies between statements and their side effects are
-respected; removing a statement that a later one needs typically changes the
-error, and such a removal is therefore rejected.
+a one-minimal subset that reproduces it. Each candidate is evaluated in a
+separate R process so that dependencies between statements and their side
+effects are respected; removing a statement that a later one needs typically
+changes the error, and such a removal is therefore rejected.
 
 Supply a custom \code{oracle} to minimize against any condition you can express as
 a predicate, rather than against the recorded failure. The oracle receives a
-character vector of statements and must return a single logical.
+character vector of statements and must return a single logical. The empty
+statement set is not considered; a custom oracle should be false for it if
+the one-minimality guarantee is required.
 }
 \examples{
 # A failing script padded with irrelevant setup.

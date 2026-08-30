@@ -83,11 +83,11 @@ Safe over-approximations (reduce yield, never cause unsound drops): NSE like
 
 Worth recording, because it lowers the risk if this is ever revisited.
 
-`ddmin()` unconditionally tests the full set first (`R/ddmin.R:68-71`) and hard
-`stop()`s if it does not reproduce:
+`ddmin()` unconditionally tests the full set first and stops if it does not
+reproduce:
 
 ```r
-if (!test(seq_len(n_items))) {
+if (!test(seq_len(n_items), exempt = TRUE)) {
   stop("`interesting` is FALSE for the full set; nothing to minimize.", call. = FALSE)
 }
 ```

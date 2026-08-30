@@ -14,7 +14,9 @@ It runs each script in `scripts/` under both `algorithm = "cdd"` and
 
 Purpose: decide whether `algorithm = "cdd"` should be the default. Only prefer
 `"cdd"` if it is at least as good as `"ddmin"` on **both** oracle-call count and
-output size across the corpus; otherwise the default stays `"ddmin"`.
+output size across the corpus; otherwise the default stays `"ddmin"`. The
+harness prints results but does not preserve them, so this directory is a small
+regression/decision corpus, not evidence for a package-wide performance claim.
 
 ## Scripts
 
@@ -22,3 +24,5 @@ output size across the corpus; otherwise the default stays `"ddmin"`.
 - `02-early-failure.R` — fails early with a long tail (truncation win).
 - `03-tangled.R` — interdependent statements that must be kept together.
 - `04-warning-target.R` — warns rather than errors (`condition = "warning"`).
+- `05-pipeline.R` — expression-level reduction of a pipeline.
+- `06-nested-call.R` — expression-level reduction of a nested call.

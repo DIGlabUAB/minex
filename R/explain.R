@@ -92,14 +92,22 @@ build_bug_report <- function(x, raw, session_info) {
 #' session state, not the OS; a fix may still have side effects. Use
 #' `verify_fix = FALSE` for input you would not run yourself.
 #'
+#' Prompt-level data framing and the source-text call denylist are
+#' defense-in-depth mitigations, not security boundaries. Code supplied to the
+#' model can influence its output, and aliases or dynamic evaluation can evade
+#' the denylist. See the OWASP Prompt Injection guidance in the references.
+#'
 #' @param x A `minex_result` from [minex()].
 #' @param chat An `ellmer` Chat object (e.g. `ellmer::chat_ollama()`). Defaults to
 #'   `getOption("minex.chat")`. Used statelessly (cloned per call).
 #' @param verify_fix Logical. Run the proposed fix to check the failure is gone.
-#' @param timeout Seconds for the sandboxed fix execution.
+#' @param timeout Seconds allowed for fix execution in the isolated R process.
 #' @param session_info Logical. Include `utils::sessionInfo()` in the bug report.
 #' @param modes Which sections to produce.
 #' @return A `minex_explanation` object.
+#' @references
+#' OWASP Foundation. "LLM01:2025 Prompt Injection."
+#' \url{https://genai.owasp.org/llmrisk/llm01-prompt-injection/}
 #' @examples
 #' \dontrun{
 #' # Write a failing script and reduce it, then explain the failure.

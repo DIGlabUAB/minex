@@ -1,5 +1,6 @@
-# Hierarchical Delta Debugging follows Misherghi and Su (ICSE 2006),
-# DOI: 10.1145/1134285.1134307.
+# This specialized HDD*-style pass is based on Misherghi and Su (ICSE 2006),
+# DOI: 10.1145/1134285.1134307. It reduces only the R constructs for which this
+# package defines safe deletion spans, rather than every node in a general tree.
 # Collect reducible deletion spans grouped by tree depth (shallow -> deep),
 # excluding spans on lines carrying a trailing comment.
 #' @keywords internal
@@ -79,8 +80,8 @@ hdd_star <- function(text, reproduces, max_oracle_calls = Inf, info = new.env(),
         if (!pt_parses(cand)) return(FALSE)   # free reparse reject (no budget)
         isTRUE(reproduces(cand))
       }
-      # We want the SMALLEST set of spans to KEEP such that dropping the rest
-      # still reproduces -> ddmin finds a 1-minimal keep-set; then delete the rest.
+      # We want a one-minimal set of spans to KEEP such that dropping the rest
+      # still reproduces; ddmin finds that keep-set, then we delete the rest.
       kept <- ddmin(idx, function(k) interesting(k),
                     max_oracle_calls = remaining, verbose = verbose, .info = sub)
       lvl_calls <- sub$oracle_calls %||% 0L

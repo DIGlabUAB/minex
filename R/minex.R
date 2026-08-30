@@ -1,6 +1,6 @@
 #' Minimize a failing R script to a reproducible example
 #'
-#' Reduces a failing piece of R code to the smallest subset of its top-level
+#' Reduces a failing piece of R code to a one-minimal subset of its top-level
 #' statements that still triggers the same failure. The result is a *one-minimal*
 #' example: removing any remaining statement makes the failure disappear. This is
 #' the form requested when reporting bugs or asking for help, and the part of
@@ -14,14 +14,16 @@
 #'
 #' By default `minex()` first runs the whole input to record the failure it
 #' produces (its condition message and class), then uses [ddmin()] to search for
-#' a minimal subset that reproduces it. Each candidate is evaluated in a separate
-#' R process so that dependencies between statements and their side effects are
-#' respected; removing a statement that a later one needs typically changes the
-#' error, and such a removal is therefore rejected.
+#' a one-minimal subset that reproduces it. Each candidate is evaluated in a
+#' separate R process so that dependencies between statements and their side
+#' effects are respected; removing a statement that a later one needs typically
+#' changes the error, and such a removal is therefore rejected.
 #'
 #' Supply a custom `oracle` to minimize against any condition you can express as
 #' a predicate, rather than against the recorded failure. The oracle receives a
-#' character vector of statements and must return a single logical.
+#' character vector of statements and must return a single logical. The empty
+#' statement set is not considered; a custom oracle should be false for it if
+#' the one-minimality guarantee is required.
 #'
 #' @param file Path to a file containing the R code to minimize. Used only when
 #'   neither `code` nor `clipboard` is supplied.
@@ -35,7 +37,7 @@
 #'   returning a single logical. When supplied, the target failure is not
 #'   recorded automatically and `condition`, `match` and failure-point truncation
 #'   are all bypassed; you are fully responsible for defining what counts as
-#'   reproducing the failure.
+#'   reproducing the failure. Empty candidates are not tested.
 #' @param condition Which kind of condition to target: `"error"` (the default),
 #'   `"warning"`, `"message"`, or `"any"` (the most severe condition present,
 #'   error > warning > message). Ignored when a custom `oracle` is supplied.
@@ -48,8 +50,8 @@
 #'   `message` and `classes`), and returning a single logical, for custom
 #'   matching logic.
 #' @param algorithm The reduction strategy passed to [ddmin()]: `"cdd"`
-#'   (Counter-Based Delta Debugging, the default) or `"ddmin"` (the classic
-#'   block-halving loop).
+#'   (the default, adapted from Counter-Based Delta Debugging) or `"ddmin"` (the
+#'   classic block-halving loop).
 #' @param backend Either `"callr"` (evaluate each candidate in a fresh R process,
 #'   the default and the only choice that fully isolates state) or `"inprocess"`
 #'   (evaluate in the current session, faster but without isolation; a script's
@@ -73,12 +75,14 @@
 #'   pass runs on whatever the first left rather than on a fresh budget.
 #' @param granularity `"statement"` (the default) reduces only at the level of
 #'   top-level statements. `"expression"`
-#'   additionally reduces *within* each surviving statement via HDD (hierarchical
-#'   delta debugging): pipeline stages (`|>`, magrittr `%>%`) and positional call
-#'   arguments can be dropped from a statement as long as the whole kept set
-#'   still reproduces the target failure. When such a reduction makes an earlier
-#'   statement redundant (for example a value dropped from a later call), that
-#'   statement is swept out, so the result stays statement one-minimal.
+#'   additionally reduces *within* each surviving statement via a specialized
+#'   HDD*-style pass based on hierarchical delta debugging: pipeline stages
+#'   (`|>`, magrittr `%>%`) and positional call arguments can be dropped from a
+#'   statement as long as the whole kept set still reproduces the target
+#'   failure. This is not a general reducer over every R syntax-tree node. When
+#'   such a reduction makes an earlier statement redundant (for example a value
+#'   dropped from a later call), that statement is swept out, so the result stays
+#'   statement one-minimal.
 #'
 #'   When `granularity` is left at its default *and* statement-level reduction
 #'   removes nothing, `minex()` retries once at `"expression"` rather than

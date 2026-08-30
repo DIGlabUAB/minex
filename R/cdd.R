@@ -1,5 +1,7 @@
-# Counter-Based Delta Debugging round-growth rate, Zhang et al. (ICSE 2025),
-# Lemma III.2. DOI: 10.1109/ICSE55347.2025.00117.
+# Adapted from Counter-Based Delta Debugging, Zhang et al. (ICSE 2025),
+# DOI: 10.1109/ICSE55347.2025.00117. This reducer uses the paper's round-growth
+# and block-size equations, but after a successful deletion it recomputes the
+# initial probability for the shorter candidate and restarts the round counter.
 # Written as an expression, not the rounded 1.582, to stay exact.
 PROBDD_GROWTH_RATE <- 1 / (1 - exp(-1))
 

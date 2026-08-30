@@ -25,8 +25,10 @@ code together with its output. It does nothing about the *minimal* half. That
 part, stripping a script down to the few lines that actually matter, is still
 done by hand, and it is the tedious step.
 
-`minex()` automates it. Give it failing code and it returns the smallest subset
-of statements that still produces the same error.
+`minex()` automates it. Give it failing code and it returns a one-minimal set of
+statements that still produces the same error: no remaining statement can be
+removed individually while preserving the failure. This is not a guarantee of
+the globally smallest possible script.
 
 ## A first example
 
@@ -116,11 +118,11 @@ The result is usually small enough to capture with `dput()`.
 ## The algorithm
 
 Both `minex()` and `reduce_rows()` are front ends to `ddmin()`. The default
-strategy is Counter-Based Delta Debugging (CDD; Zhang et al., 2025), which
-skips deletion attempts that its counters identify as redundant. The classic
-block-halving algorithm of Zeller and Hildebrandt (2002) remains available with
-`algorithm = "ddmin"`. `ddmin()` works on any collection plus a predicate, so it
-is reusable on its own.
+strategy adapts Counter-Based Delta Debugging (CDD; Zhang et al., 2025): it uses
+the counter-based block sizing described for CDD, but restarts the round counter
+after each successful reduction. The classic block-halving algorithm of Zeller and
+Hildebrandt (2002) remains available with `algorithm = "ddmin"`. `ddmin()` works
+on any collection plus a predicate, so it is reusable on its own.
 
 ```{r}
 ddmin(strsplit("the quick brown fox", " ")[[1]], function(s) "fox" %in% s)
@@ -134,9 +136,10 @@ Kiss (2024), but is not their DDMIN* algorithm, which repeatedly invokes DDMIN.
 
 At the default granularity, `minex()` first works over top-level statements. If
 that pass removes nothing, it automatically retries within the surviving
-statements using HDD* (Hierarchical Delta Debugging; Misherghi and Su, 2006).
-The expression pass can remove pipeline stages (`|>` and `%>%`) and positional
-call arguments. You can request it directly with
+statements using a specialized HDD*-style pass based on Hierarchical Delta
+Debugging (Misherghi and Su, 2006). It is not a general reducer over every R
+syntax-tree node: the expression pass currently removes pipeline stages (`|>`
+and `%>%`) and positional call arguments. You can request it directly with
 `granularity = "expression"`, or suppress the automatic retry by explicitly
 passing `granularity = "statement"`.
 

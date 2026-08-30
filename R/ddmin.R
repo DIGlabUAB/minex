@@ -1,17 +1,21 @@
-#' Delta debugging
+#' Minimize a collection with delta debugging
 #'
-#' General implementation of the `ddmin` minimization algorithm of Zeller and
-#' Hildebrandt (2002). Given a collection of elements and a predicate that
-#' reports whether a subset still exhibits some behavior of interest, `ddmin()`
-#' returns a subset that is *one-minimal*: the predicate holds for it, but fails
-#' for every subset obtained by removing a single element.
+#' A general-purpose delta debugging interface with two first-phase strategies:
+#' the default adaptation of Counter-Based Delta Debugging and the classic
+#' `ddmin` algorithm of Zeller and Hildebrandt (2002). Given a collection of
+#' elements and a predicate that reports whether a subset still exhibits some
+#' behavior of interest, `ddmin()` returns a subset that is *one-minimal*: the
+#' predicate holds for it, but fails for every subset obtained by removing a
+#' single element. This guarantee assumes the predicate is false for the empty
+#' subset, which `ddmin()` does not test. One-minimality does not imply a
+#' globally smallest subset.
 #'
-#' The algorithm partitions the current candidate into `n` blocks (starting with
-#' `n = 2`). It first tests whether any single block reproduces the behavior; if
-#' so it continues with that block. Otherwise it tests each complement (the
-#' candidate with one block removed) and continues with the first that
-#' reproduces. If neither succeeds the granularity is doubled, up to the point
-#' where each element sits in its own block, which guarantees one-minimality.
+#' The classic strategy partitions the current candidate into `n` blocks
+#' (starting with `n = 2`). It tests individual blocks and then their
+#' complements, increasing granularity when neither reduces the candidate. The
+#' CDD adaptation instead uses the cited counter-based block-size equations and
+#' restarts after successful deletions. Both are followed by the repeated
+#' singleton-deletion sweep described under `algorithm`.
 #'
 #' Results of the predicate are cached on the set of element indices, so an
 #' identical configuration is never evaluated twice.
@@ -19,11 +23,15 @@
 #' @param items A list or atomic vector of elements to minimize.
 #' @param interesting A predicate applied to a subset of `items`, in the same
 #'   form as `items`, returning a single logical. It should return `TRUE` when
-#'   the subset still reproduces the behavior of interest.
+#'   the subset still reproduces the behavior of interest. Empty subsets are not
+#'   tested; this predicate should be false for the empty subset if the
+#'   one-minimality guarantee is required.
 #' @param algorithm Character. The reduction strategy for the first phase, one
-#'   of `"cdd"` (Counter-Based Delta Debugging, the default) or `"ddmin"` (the
-#'   classic block-halving loop). Both are followed by a fixed-point verification
-#'   sweep that removes any remaining removable single elements.
+#'   of `"cdd"` (the default, adapted from Counter-Based Delta Debugging) or
+#'   `"ddmin"` (the classic block-halving loop). The CDD adaptation restarts its
+#'   round counter after a successful deletion. Both strategies are followed by
+#'   a fixed-point verification sweep that removes any remaining removable
+#'   single elements.
 #' @param max_oracle_calls Numeric. An upper bound on the number of predicate
 #'   evaluations. Must be at least 1. When the budget is exhausted the reduction
 #'   stops early and returns the smallest set confirmed so far; the result is

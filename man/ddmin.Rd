@@ -2,7 +2,7 @@
 % Please edit documentation in R/ddmin.R
 \name{ddmin}
 \alias{ddmin}
-\title{Delta debugging}
+\title{Minimize a collection with delta debugging}
 \usage{
 ddmin(
   items,
@@ -18,12 +18,16 @@ ddmin(
 
 \item{interesting}{A predicate applied to a subset of \code{items}, in the same
 form as \code{items}, returning a single logical. It should return \code{TRUE} when
-the subset still reproduces the behavior of interest.}
+the subset still reproduces the behavior of interest. Empty subsets are not
+tested; this predicate should be false for the empty subset if the
+one-minimality guarantee is required.}
 
 \item{algorithm}{Character. The reduction strategy for the first phase, one
-of \code{"cdd"} (Counter-Based Delta Debugging, the default) or \code{"ddmin"} (the
-classic block-halving loop). Both are followed by a fixed-point verification
-sweep that removes any remaining removable single elements.}
+of \code{"cdd"} (the default, adapted from Counter-Based Delta Debugging) or
+\code{"ddmin"} (the classic block-halving loop). The CDD adaptation restarts its
+round counter after a successful deletion. Both strategies are followed by
+a fixed-point verification sweep that removes any remaining removable
+single elements.}
 
 \item{max_oracle_calls}{Numeric. An upper bound on the number of predicate
 evaluations. Must be at least 1. When the budget is exhausted the reduction
@@ -44,19 +48,23 @@ environment; the returned value itself carries no attributes.}
 The one-minimal subset of \code{items}, in the original order.
 }
 \description{
-General implementation of the \code{ddmin} minimization algorithm of Zeller and
-Hildebrandt (2002). Given a collection of elements and a predicate that
-reports whether a subset still exhibits some behavior of interest, \code{ddmin()}
-returns a subset that is \emph{one-minimal}: the predicate holds for it, but fails
-for every subset obtained by removing a single element.
+A general-purpose delta debugging interface with two first-phase strategies:
+the default adaptation of Counter-Based Delta Debugging and the classic
+\code{ddmin} algorithm of Zeller and Hildebrandt (2002). Given a collection of
+elements and a predicate that reports whether a subset still exhibits some
+behavior of interest, \code{ddmin()} returns a subset that is \emph{one-minimal}: the
+predicate holds for it, but fails for every subset obtained by removing a
+single element. This guarantee assumes the predicate is false for the empty
+subset, which \code{ddmin()} does not test. One-minimality does not imply a
+globally smallest subset.
 }
 \details{
-The algorithm partitions the current candidate into \code{n} blocks (starting with
-\code{n = 2}). It first tests whether any single block reproduces the behavior; if
-so it continues with that block. Otherwise it tests each complement (the
-candidate with one block removed) and continues with the first that
-reproduces. If neither succeeds the granularity is doubled, up to the point
-where each element sits in its own block, which guarantees one-minimality.
+The classic strategy partitions the current candidate into \code{n} blocks
+(starting with \code{n = 2}). It tests individual blocks and then their
+complements, increasing granularity when neither reduces the candidate. The
+CDD adaptation instead uses the cited counter-based block-size equations and
+restarts after successful deletions. Both are followed by the repeated
+singleton-deletion sweep described under \code{algorithm}.
 
 Results of the predicate are cached on the set of element indices, so an
 identical configuration is never evaluated twice.

@@ -17,10 +17,12 @@ reduce_rows(
 
 \item{predicate}{A function taking a data frame (a subset of \code{data}'s rows)
 and returning a single logical: \code{TRUE} when the subset still reproduces the
-failure of interest.}
+failure of interest. Empty subsets are not tested; the predicate should be
+false for an empty data frame if the one-minimality guarantee is required.}
 
 \item{algorithm}{Character. The reduction strategy for the first phase, one
-of \code{"cdd"} (default) or \code{"ddmin"}. Passed through to \code{\link[=ddmin]{ddmin()}}.}
+of \code{"cdd"} (the default CDD adaptation) or \code{"ddmin"}. Passed through to
+\code{\link[=ddmin]{ddmin()}}.}
 
 \item{max_oracle_calls}{Numeric. An upper bound on the number of predicate
 calls. Passed through to \code{\link[=ddmin]{ddmin()}}.}
@@ -33,9 +35,11 @@ A data frame containing the one-minimal subset of rows.
 \description{
 Often a bug only shows up with a large data frame, even though a handful of
 rows is enough to trigger it. \code{reduce_rows()} applies \code{\link[=ddmin]{ddmin()}} over the rows
-of \code{data} and returns the smallest subset for which \code{predicate} still holds,
-preserving the original row order. The result is typically small enough to
-paste into a bug report with \code{\link[=dput]{dput()}}.
+of \code{data} and returns a one-minimal subset for which \code{predicate} still holds,
+preserving the original row order. No remaining row can be removed
+individually while preserving the predicate; this is not a guarantee of the
+globally smallest subset. The result is typically small enough to paste into
+a bug report with \code{\link[=dput]{dput()}}.
 }
 \examples{
 df <- data.frame(id = 1:6, value = c(3, 8, 999, 2, 5, 7))

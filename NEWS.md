@@ -2,7 +2,11 @@
 
 * Corrected the expansion of CDD to Counter-Based Delta Debugging and added
   primary citations for CDD and HDD/HDD*, plus related work on fixed-point
-  minimization, throughout the package documentation.
+  minimization, throughout the package documentation. Documentation now
+  distinguishes the package's adaptations from the papers' exact algorithms.
+* Clarified that LLM-proposed fixes run in an isolated process, not an operating
+  system sandbox, and that prompt framing and the call denylist are mitigations,
+  not security boundaries.
 
 # minex 0.2.0
 
@@ -12,8 +16,8 @@
   diagnosis. Provider-agnostic: works with any `ellmer`-supported backend
   (OpenAI, Anthropic, Ollama, OpenRouter, etc.).
 * `minex(granularity = "expression")` reduces *within* a statement, isolating
-  a failing pipeline stage (`|>`/`%>%`) or positional call argument via
-  Hierarchical Delta Debugging (HDD*; Misherghi and Su, 2006,
+  a failing pipeline stage (`|>`/`%>%`) or positional call argument via a
+  specialized HDD*-style pass (Misherghi and Su, 2006,
   <doi:10.1145/1134285.1134307>).
 * **`minex()` now retries at `granularity = "expression"` when statement-level
   reduction removes nothing**, instead of returning the input unchanged. This
@@ -44,7 +48,8 @@
 * Failure-point truncation drops statements after the failure for free.
 * `max_oracle_calls` bounds the search; incomplete results are labelled
   `complete = FALSE`, print a note, and emit a warning.
-* New `algorithm = "cdd"` (Counter-Based Delta Debugging, Zhang et al. 2025,
+* New `algorithm = "cdd"` (adapted from Counter-Based Delta Debugging,
+  Zhang et al. 2025,
   <doi:10.1109/ICSE55347.2025.00117>)
   alongside the classic `"ddmin"`. **`"cdd"` is now the default algorithm**
   for `minex()`, `ddmin()`, and `reduce_rows()`; the classic `"ddmin"` block-
