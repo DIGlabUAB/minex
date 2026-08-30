@@ -1,3 +1,9 @@
+# minex (development version)
+
+* Corrected the expansion of CDD to Counter-Based Delta Debugging and added
+  primary citations for CDD, HDD/HDD*, and the fixed-point verification sweep
+  throughout the package documentation.
+
 # minex 0.2.0
 
 * `explain_failure()` sends a `minex()` result to an LLM (via the suggested
@@ -7,7 +13,8 @@
   (OpenAI, Anthropic, Ollama, OpenRouter, etc.).
 * `minex(granularity = "expression")` reduces *within* a statement, isolating
   a failing pipeline stage (`|>`/`%>%`) or positional call argument via
-  Hierarchical Delta Debugging (HDD*).
+  Hierarchical Delta Debugging (HDD*; Misherghi and Su, 2006,
+  <doi:10.1145/1134285.1134307>).
 * **`minex()` now retries at `granularity = "expression"` when statement-level
   reduction removes nothing**, instead of returning the input unchanged. This
   is the usual outcome for a script that is one function definition plus a
@@ -38,7 +45,8 @@
 * Failure-point truncation drops statements after the failure for free.
 * `max_oracle_calls` bounds the search; incomplete results are labelled
   `complete = FALSE`, print a note, and emit a warning.
-* New `algorithm = "cdd"` (Counting-based Delta Debugging, Zhang et al. 2025)
+* New `algorithm = "cdd"` (Counter-Based Delta Debugging, Zhang et al. 2025,
+  <doi:10.1109/ICSE55347.2025.00117>)
   alongside the classic `"ddmin"`. **`"cdd"` is now the default algorithm**
   for `minex()`, `ddmin()`, and `reduce_rows()`; the classic `"ddmin"` block-
   halving loop remains available via `algorithm = "ddmin"`.

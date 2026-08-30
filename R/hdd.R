@@ -1,3 +1,5 @@
+# Hierarchical Delta Debugging follows Misherghi and Su (ICSE 2006),
+# DOI: 10.1145/1134285.1134307.
 # Collect reducible deletion spans grouped by tree depth (shallow -> deep),
 # excluding spans on lines carrying a trailing comment.
 #' @keywords internal

@@ -21,9 +21,9 @@ form as \code{items}, returning a single logical. It should return \code{TRUE} w
 the subset still reproduces the behavior of interest.}
 
 \item{algorithm}{Character. The reduction strategy for the first phase, one
-of \code{"cdd"} (convergent delta debugging, the default) or \code{"ddmin"} (the
-classic block-halving loop). Both are followed by a verification sweep that
-removes any remaining removable single elements.}
+of \code{"cdd"} (Counter-Based Delta Debugging, the default) or \code{"ddmin"} (the
+classic block-halving loop). Both are followed by a fixed-point verification
+sweep that removes any remaining removable single elements.}
 
 \item{max_oracle_calls}{Numeric. An upper bound on the number of predicate
 evaluations. Must be at least 1. When the budget is exhausted the reduction
@@ -76,8 +76,12 @@ Input." \emph{IEEE Transactions on Software Engineering}, 28(2), 183-200.
 \doi{10.1109/32.988498}
 
 Zhang M, Xu Z, Tian Y, Cheng X, Sun C (2025). "Toward a Better Understanding
-of Probabilistic Delta Debugging." ICSE 2025. arXiv:2408.04735.
-\url{https://arxiv.org/abs/2408.04735}
+of Probabilistic Delta Debugging." \emph{ICSE 2025}.
+\doi{10.1109/ICSE55347.2025.00117}
+
+Vince D, Kiss A (2024). "Evaluation of the Fixed-Point Iteration of
+Minimizing Delta Debugging." \emph{Journal of Software: Evolution and Process},
+36(10), e2702. \doi{10.1002/smr.2702}
 }
 \seealso{
 \code{\link[=minex]{minex()}} for the script-reduction front end and \code{\link[=reduce_rows]{reduce_rows()}} for

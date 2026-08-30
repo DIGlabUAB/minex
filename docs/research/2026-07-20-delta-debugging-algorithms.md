@@ -1,7 +1,7 @@
 # Delta debugging algorithms: literature survey
 
 Date: 2026-07-20
-Status: research notes, feeding the 0.2.0 and 0.3.0 designs
+Status: research notes; implementation outcomes updated after 0.2.0
 Scope: reducing **oracle call count** (not wall-clock constant factors)
 
 ## Why this matters for minex
@@ -34,12 +34,12 @@ tool had little to offer anyway. The realistic painful case is a middling one
 
 | Rank | Algorithm | Citation | Improvement vs ddmin | 1-minimal? | LOC | Verdict |
 |---|---|---|---|---|---|---|
-| 1 | **CDD** (Counting-based DD) | Zhang, Xu, Tian, Cheng & Sun, ICSE 2025 | ~52% fewer queries, ~27% less time (76 benchmarks) | **No** (~1.1% miss rate) | ~40-60 | **Adopt for 0.2.0/0.3.0** |
+| 1 | **CDD** (Counter-Based DD) | Zhang, Xu, Tian, Cheng & Sun, ICSE 2025 | ~52% fewer queries, ~27% less time (76 benchmarks) | **No** (~1.1% miss rate) | ~40-60 | **Adopted in 0.2.0** |
 | 2 | ProbDD | Wang, Shen, Chen, Xiong & Zhang, ESEC/FSE 2021 | same order as CDD | No, in practice | ~150-250 | Dominated by CDD |
 | 3 | PMA | Tao & Xue, EASE 2025 | +22% on ProbDD | claimed, unreplicated | high | Re-check in ~1 year |
 | 4 | **Greedy O(n) pre-filter** | folklore (cf. C-Reduce passes) | additive, unquantified | **Yes, trivially** | ~15 | **Adopt** |
-| 5 | **DD\* / fixpoint iteration** | Vince, JSEP 2024 | restores minimality after a lossy pass | **Yes, by construction** | trivial | **Adopt as safety net** |
-| 6 | HDD / Coarse HDD / HDDr | Misherghi & Su, ICSE 2006 + successors | 25-40% smaller output; HDDr 29-65% less time | Yes (1-tree-minimal) | high | **0.3.0 -- see below** |
+| 5 | **DD\* / fixed-point iteration** | Vince & Kiss, JSEP 2024 | restores minimality after a lossy pass | **Yes, by construction** | trivial | **Adopted as safety net** |
+| 6 | HDD / Coarse HDD / HDDr | Misherghi & Su, ICSE 2006 + successors | 25-40% smaller output; HDDr 29-65% less time | Yes (1-tree-minimal) | high | **HDD* subset adopted in 0.2.0** |
 | 7 | Perses | Sun, Li, Zhang, Gu & Su, ICSE 2018 | output 2% the size of ddmin's; time 23% of ddmin's | Yes, stronger | very high | **0.3.0 -- see below** |
 | 8 | WDD | Zhou, Xu, Zhang, Tian & Sun, ICSE 2025 | numbers UNVERIFIED | inherits base | low-med | Orthogonal; revisit |
 | 9 | Vulcan | Xu, Tian, Zhang, Zhao, Jiang & Sun, OOPSLA 2023 | smaller than 1-minimal, but **more** calls | beyond 1-minimal | high | **Wrong direction** for us |
@@ -70,7 +70,7 @@ one-minimal result, and that promise is the package's core claim. Adopting CDD
 without mitigation would make the documentation false ~1% of the time --
 silently, in exactly the way that produces a bad bug report.
 
-Mitigation: a bounded fixpoint sweep (Vince 2024) after CDD converges. It only
+Mitigation: a bounded fixed-point sweep (Vince & Kiss 2024) after CDD converges. It only
 does a second full pass when something is actually removable, so the amortised
 cost is small relative to the savings.
 
@@ -128,9 +128,11 @@ If ever revisited, the defensible form is a narrowly scoped
 
 ---
 
-## Deferred to 0.3.0: sub-expression reduction (HDD / Perses)
+## Implemented in 0.2.0: sub-expression reduction (HDD*)
 
-This is the recorded rationale for the 0.3.0 milestone.
+This section records the rationale that led to the expression-level HDD* pass
+shipped in 0.2.0. The implementation deliberately supports the R constructs
+with safe deletion semantics: pipeline stages and positional call arguments.
 
 ### The problem
 
@@ -181,11 +183,12 @@ R exposes its own AST natively: `parse()` returns a real expression tree,
 generator is required -- which is the single biggest cost in HDD/Perses
 implementations for other languages.
 
-### Recommendation for 0.3.0
+### Implemented approach
 
-Start with **HDD** over the R AST (parser is free, guarantee is stronger,
-scope is bounded). Treat Perses as a possible 0.4.0+ refinement. Reuse the
-Phase A/B/C engine at each tree level rather than writing a second reducer.
+The package starts with **HDD** over R's parse data (the parser is free, the
+guarantee is stronger, and the scope is bounded). It reuses the Phase A/B/C
+engine at each reducible tree level and repeats passes to a fixed point (HDD*).
+Perses remains a possible future refinement.
 
 ---
 
@@ -222,7 +225,7 @@ all query-count and 1-minimality figures quoted above.
   Delta Debugging." *ESEC/FSE 2021*. DOI 10.1145/3468264.3468625.
 - Tao, Y. & Xue, J. (2025). "Accelerating Delta Debugging through Probabilistic
   Monotonicity Assessment." *EASE 2025*. arXiv:2506.11614.
-- Vince, D. (2024). "Evaluation of the Fixed-Point Iteration of Minimizing Delta
+- Vince, D. & Kiss, A. (2024). "Evaluation of the Fixed-Point Iteration of Minimizing Delta
   Debugging." *J. Softw. Evol. Proc.* DOI 10.1002/smr.2702.
 - Misherghi, G. & Su, Z. (2006). "HDD: Hierarchical Delta Debugging."
   *ICSE 2006*, 142-151. DOI 10.1145/1134285.1134307.

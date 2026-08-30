@@ -1,3 +1,5 @@
+# Fixed-point verification follows the iteration evaluated by Vince and Kiss
+# (2024), DOI: 10.1002/smr.2702.
 #' @keywords internal
 #' @noRd
 remove_removable_singles <- function(kept, test, progress = NULL) {

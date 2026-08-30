@@ -51,7 +51,7 @@ two condition summaries, \code{candidate} and \code{target} (each a list with
 matching logic.}
 
 \item{algorithm}{The reduction strategy passed to \code{\link[=ddmin]{ddmin()}}: \code{"cdd"}
-(convergent delta debugging, the default) or \code{"ddmin"} (the classic
+(Counter-Based Delta Debugging, the default) or \code{"ddmin"} (the classic
 block-halving loop).}
 
 \item{backend}{Either \code{"callr"} (evaluate each candidate in a fresh R process,
@@ -174,6 +174,18 @@ minex(code = script)
 # Reduce a failing script copied to the system clipboard:
 minex(clipboard = TRUE)
 }
+}
+\references{
+Zhang M, Xu Z, Tian Y, Cheng X, Sun C (2025). "Toward a Better Understanding
+of Probabilistic Delta Debugging." \emph{ICSE 2025}.
+\doi{10.1109/ICSE55347.2025.00117}
+
+Misherghi G, Su Z (2006). "HDD: Hierarchical Delta Debugging." \emph{ICSE 2006},
+142-151. \doi{10.1145/1134285.1134307}
+
+Vince D, Kiss A (2024). "Evaluation of the Fixed-Point Iteration of
+Minimizing Delta Debugging." \emph{Journal of Software: Evolution and Process},
+36(10), e2702. \doi{10.1002/smr.2702}
 }
 \seealso{
 \code{\link[=ddmin]{ddmin()}} for the underlying algorithm and \code{\link[=reduce_rows]{reduce_rows()}} for

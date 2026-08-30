@@ -21,9 +21,9 @@
 #'   form as `items`, returning a single logical. It should return `TRUE` when
 #'   the subset still reproduces the behavior of interest.
 #' @param algorithm Character. The reduction strategy for the first phase, one
-#'   of `"cdd"` (convergent delta debugging, the default) or `"ddmin"` (the
-#'   classic block-halving loop). Both are followed by a verification sweep that
-#'   removes any remaining removable single elements.
+#'   of `"cdd"` (Counter-Based Delta Debugging, the default) or `"ddmin"` (the
+#'   classic block-halving loop). Both are followed by a fixed-point verification
+#'   sweep that removes any remaining removable single elements.
 #' @param max_oracle_calls Numeric. An upper bound on the number of predicate
 #'   evaluations. Must be at least 1. When the budget is exhausted the reduction
 #'   stops early and returns the smallest set confirmed so far; the result is
@@ -45,8 +45,12 @@
 #' \doi{10.1109/32.988498}
 #'
 #' Zhang M, Xu Z, Tian Y, Cheng X, Sun C (2025). "Toward a Better Understanding
-#' of Probabilistic Delta Debugging." ICSE 2025. arXiv:2408.04735.
-#' \url{https://arxiv.org/abs/2408.04735}
+#' of Probabilistic Delta Debugging." *ICSE 2025*.
+#' \doi{10.1109/ICSE55347.2025.00117}
+#'
+#' Vince D, Kiss A (2024). "Evaluation of the Fixed-Point Iteration of
+#' Minimizing Delta Debugging." *Journal of Software: Evolution and Process*,
+#' 36(10), e2702. \doi{10.1002/smr.2702}
 #'
 #' @seealso [minex()] for the script-reduction front end and [reduce_rows()] for
 #'   reducing data frames.

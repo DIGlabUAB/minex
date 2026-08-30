@@ -1,4 +1,5 @@
-# CDD round-growth rate, Zhang et al. (ICSE 2025), Lemma III.2.
+# Counter-Based Delta Debugging round-growth rate, Zhang et al. (ICSE 2025),
+# Lemma III.2. DOI: 10.1109/ICSE55347.2025.00117.
 # Written as an expression, not the rounded 1.582, to stay exact.
 PROBDD_GROWTH_RATE <- 1 / (1 - exp(-1))
 

@@ -70,8 +70,17 @@ Each candidate reduction runs in a fresh R process (via `callr`) so that
 statement dependencies and side effects are respected. A candidate
 “reproduces” the failure when it errors with the same message as the
 original; matching on the condition class instead, or supplying a custom
-oracle, is also supported. The engine is `ddmin()`, an implementation of
-the delta debugging algorithm of Zeller and Hildebrandt (2002), exposed
-for reuse on any collection.
+oracle, is also supported. The engine is `ddmin()`. Its default strategy
+is Counter-Based Delta Debugging ([Zhang et al.,
+2025](https://doi.org/10.1109/ICSE55347.2025.00117)), followed by a
+fixed-point verification sweep ([Vince and Kiss,
+2024](https://doi.org/10.1002/smr.2702)) to ensure the result is
+one-minimal. The classic algorithm of [Zeller and Hildebrandt
+(2002)](https://doi.org/10.1109/32.988498) remains available with
+`algorithm = "ddmin"`.
+
+If nothing can be removed at statement level, `minex()` automatically
+descends into pipeline stages and positional call arguments using HDD\*
+([Misherghi and Su, 2006](https://doi.org/10.1145/1134285.1134307)).
 
 See `vignette("minex")` for the full walkthrough.

@@ -48,7 +48,7 @@
 #'   `message` and `classes`), and returning a single logical, for custom
 #'   matching logic.
 #' @param algorithm The reduction strategy passed to [ddmin()]: `"cdd"`
-#'   (convergent delta debugging, the default) or `"ddmin"` (the classic
+#'   (Counter-Based Delta Debugging, the default) or `"ddmin"` (the classic
 #'   block-halving loop).
 #' @param backend Either `"callr"` (evaluate each candidate in a fresh R process,
 #'   the default and the only choice that fully isolates state) or `"inprocess"`
@@ -112,6 +112,18 @@
 #'   `oracle_calls` spent on the discarded statement-level pass. Both are absent
 #'   otherwise, so `is.null(res$escalated_from)` distinguishes a result that was
 #'   reduced at the granularity asked for from one that had to descend.
+#'
+#' @references
+#' Zhang M, Xu Z, Tian Y, Cheng X, Sun C (2025). "Toward a Better Understanding
+#' of Probabilistic Delta Debugging." *ICSE 2025*.
+#' \doi{10.1109/ICSE55347.2025.00117}
+#'
+#' Misherghi G, Su Z (2006). "HDD: Hierarchical Delta Debugging." *ICSE 2006*,
+#' 142-151. \doi{10.1145/1134285.1134307}
+#'
+#' Vince D, Kiss A (2024). "Evaluation of the Fixed-Point Iteration of
+#' Minimizing Delta Debugging." *Journal of Software: Evolution and Process*,
+#' 36(10), e2702. \doi{10.1002/smr.2702}
 #'
 #' @seealso [ddmin()] for the underlying algorithm and [reduce_rows()] for
 #'   reducing data frames.
