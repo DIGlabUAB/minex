@@ -11,3 +11,5 @@
 ^.*\.Rproj$
 ^\.Rproj\.user$
 ^\.lintr$
+^CRAN-SUBMISSION$
+^CITATION\.cff$
