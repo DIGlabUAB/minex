@@ -128,8 +128,9 @@ ddmin(strsplit("the quick brown fox", " ")[[1]], function(s) "fox" %in% s)
 
 After its main reduction phase, `ddmin()` repeatedly sweeps the remaining
 elements and removes any single element whose deletion preserves the behavior.
-This fixed-point verification step (Vince and Kiss, 2024) makes the output
-*one-minimal*: removing any single element makes the behavior disappear.
+This makes the output *one-minimal*: removing any single element makes the
+behavior disappear. It shares the fixed-point motivation discussed by Vince and
+Kiss (2024), but is not their DDMIN* algorithm, which repeatedly invokes DDMIN.
 
 At the default granularity, `minex()` first works over top-level statements. If
 that pass removes nothing, it automatically retries within the surviving

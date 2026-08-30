@@ -34,11 +34,11 @@ tool had little to offer anyway. The realistic painful case is a middling one
 
 | Rank | Algorithm | Citation | Improvement vs ddmin | 1-minimal? | LOC | Verdict |
 |---|---|---|---|---|---|---|
-| 1 | **CDD** (Counter-Based DD) | Zhang, Xu, Tian, Cheng & Sun, ICSE 2025 | ~52% fewer queries, ~27% less time (76 benchmarks) | **No** (~1.1% miss rate) | ~40-60 | **Adopted in 0.2.0** |
+| 1 | **CDD** (Counter-Based DD) | Zhang, Xu, Tian, Cheng & Sun, ICSE 2025 | 52.03% fewer queries, 29.91% less time (76 benchmarks) | **No** (no CDD-specific miss rate reported) | ~40-60 | **Adopted in 0.2.0** |
 | 2 | ProbDD | Wang, Shen, Chen, Xiong & Zhang, ESEC/FSE 2021 | same order as CDD | No, in practice | ~150-250 | Dominated by CDD |
 | 3 | PMA | Tao & Xue, EASE 2025 | +22% on ProbDD | claimed, unreplicated | high | Re-check in ~1 year |
-| 4 | **Greedy O(n) pre-filter** | folklore (cf. C-Reduce passes) | additive, unquantified | **Yes, trivially** | ~15 | **Adopt** |
-| 5 | **DD\* / fixed-point iteration** | Vince & Kiss, JSEP 2024 | restores minimality after a lossy pass | **Yes, by construction** | trivial | **Adopted as safety net** |
+| 4 | **Greedy O(n) pre-filter** | folklore (cf. C-Reduce passes) | unquantified | Not evaluated | ~15 | **Rejected; see static-prefiltering notes** |
+| 5 | **DDMIN\* / fixed-point iteration** | Vince & Kiss, JSEP 2024 | repeatedly invokes DDMIN to a fixed point | **Yes, by construction** | separate algorithm | **Related motivation; not implemented** |
 | 6 | HDD / Coarse HDD / HDDr | Misherghi & Su, ICSE 2006 + successors | 25-40% smaller output; HDDr 29-65% less time | Yes (1-tree-minimal) | high | **HDD* subset adopted in 0.2.0** |
 | 7 | Perses | Sun, Li, Zhang, Gu & Su, ICSE 2018 | output 2% the size of ddmin's; time 23% of ddmin's | Yes, stronger | very high | **0.3.0 -- see below** |
 | 8 | WDD | Zhou, Xu, Zhang, Tian & Sun, ICSE 2025 | numbers UNVERIFIED | inherits base | low-med | Orthogonal; revisit |
@@ -46,7 +46,7 @@ tool had little to offer anyway. The realistic painful case is a middling one
 
 ---
 
-## Decision for the near term: CDD + greedy pre-filter + fixpoint sweep
+## Decision for the near term: CDD + singleton sweep
 
 ### The key theoretical result
 
@@ -54,36 +54,34 @@ ICSE 2025 proves ProbDD's Bayesian "probabilities" are **monotonically
 increasing round counters in disguise** (Lemma III.2: `p_r = p_0 / (1-e^-1)^r`).
 The speedup comes from *skipping redundant queries*, not from probabilistic
 inference. CDD reproduces the benefit with a closed form -- statistically
-indistinguishable from ProbDD (p = 0.10-0.87) at a third of the code.
+indistinguishable from ProbDD for final size, execution time, and query count
+(p = 0.42, 0.29, and 0.70, respectively).
 
 This is a result that makes the implementation *smaller*, which suits a
 dependency-light package.
 
 ### The catch: CDD is not 1-minimal
 
-Empirically ~1.1% of runs miss one-minimality, averaging 1.49 extra removable
-elements. ProbDD's proof holds only under an idealised complete-exploration
-model; the practical query-skipping heuristic breaks it.
+Neither CDD nor ProbDD guarantees one-minimality. The paper reports that 1.11%
+of 6,871 **ProbDD** invocations on one benchmark suite were not one-minimal,
+with 1.49 additional removable elements on average among those invocations; it
+does not report that exact failure rate for CDD.
 
 **This conflicts with a documented guarantee.** `R/ddmin.R:5-7` promises a
 one-minimal result, and that promise is the package's core claim. Adopting CDD
-without mitigation would make the documentation false ~1% of the time --
-silently, in exactly the way that produces a bad bug report.
+without mitigation could silently make the documentation false.
 
-Mitigation: a bounded fixed-point sweep (Vince & Kiss 2024) after CDD converges. It only
-does a second full pass when something is actually removable, so the amortised
-cost is small relative to the savings.
+Mitigation in `minex`: a bounded singleton-deletion sweep after CDD converges.
+It repeats only when a removal succeeds and restores one-minimality. This shares
+the fixed-point goal studied by Vince & Kiss (2024), but it is not their DDMIN*
+algorithm, which repeatedly invokes the complete DDMIN algorithm.
 
-### Three-phase engine
+### Two-phase engine
 
 ```
-Phase A  greedy O(n) pre-filter    each removal oracle-verified -> safe
-Phase B  CDD rounds                closed-form block sizing, skips redundant queries
-Phase C  fixpoint sweep            re-test singles to convergence -> restores 1-minimality
+Phase A  CDD rounds                closed-form block sizing, skips redundant queries
+Phase B  singleton sweep           re-test singles to convergence -> restores 1-minimality
 ```
-
-Phases A and C are the same single-element-removal helper invoked at different
-points, so it is one function used twice.
 
 Implementation notes:
 
@@ -92,7 +90,7 @@ Implementation notes:
 - `s_r` (the expected-gain-maximising block size) has a continuous relaxation
   `s_r ~ -1/ln(1-p_r)`, but `len` is small enough to just take the discrete
   argmax over `1..len` directly.
-- Phase B resets its round counter on success, mirroring ddmin's `n <- 2L` reset.
+- Phase A resets its round counter on success, mirroring ddmin's `n <- 2L` reset.
 
 ---
 
@@ -158,16 +156,17 @@ not: dropping `filter()` from a pipeline is fine, but dropping `mtcars` leaves
 ### The two candidate approaches
 
 **HDD -- Hierarchical Delta Debugging** (Misherghi & Su, ICSE 2006, DOI
-10.1145/1134285.1134307). Runs ddmin level-by-level over the AST, so every
-candidate is syntactically valid by construction. Guarantees *1-tree-minimality*
-(no single tree node removable while preserving the property) -- strictly
-stronger than flat 1-minimality. Successors:
+10.1145/1134285.1134307). The original paper defines both HDD and its iterative
+HDD* variant, which runs HDD to a fixed point and guarantees
+*1-tree-minimality* (no single tree node removable while preserving the
+property). Successors:
 
-- Coarse HDD (Hodovan, Kiss & Gyimothy, ICSME 2017)
+- Coarse HDD (Hodovan, Kiss & Gyimothy, ICSME 2017, DOI
+  10.1109/ICSME.2017.26)
 - HDDr, a recursive variant (Kiss, Hodovan & Gyimothy, A-TEST 2018, DOI
   10.1145/3278186.3278189) -- 29-65% less time than baseline HDD
-- Picireny / "Modernizing HDD" (Hodovan & Kiss, A-TEST 2016) -- 25-40% smaller
-  output than flat HDD. *DOI unconfirmed.*
+- Picireny / "Modernizing HDD" (Hodovan & Kiss, A-TEST 2016, DOI
+  10.1145/2994291.2994296) -- 25-40% smaller output than flat HDD.
 
 **Perses -- syntax-guided program reduction** (Sun, Li, Zhang, Gu & Su, ICSE
 2018, DOI 10.1145/3180155.3180236). Uses the grammar to only ever generate
@@ -200,11 +199,6 @@ following were flagged as **not independently verified**:
 
 - **WDD** quantitative claims -- only the abstract was recoverable. Do not quote
   percentages.
-- **Picireny / "Modernizing HDD"** (A-TEST 2016, ACM DL id 2994296) -- exact DOI
-  unconfirmed.
-- **C-Reduce** (Regehr et al., PLDI 2012) -- two conflicting DOI strings seen
-  (`10.1145/2345156.2254104` vs `10.1145/2254064.2254104`). dblp confirms venue
-  and pages; the DOI needs a final check.
 - **ProbDD** and **PMA** full texts could not be machine-extracted; their details
   are corroborated via the ICSE 2025 re-analysis rather than read directly.
 
@@ -230,9 +224,9 @@ all query-count and 1-minimality figures quoted above.
 - Misherghi, G. & Su, Z. (2006). "HDD: Hierarchical Delta Debugging."
   *ICSE 2006*, 142-151. DOI 10.1145/1134285.1134307.
 - Hodovan, R. & Kiss, A. (2016). "Modernizing Hierarchical Delta Debugging."
-  *A-TEST 2016*. ACM DL id 2994296. *DOI unconfirmed.*
+  *A-TEST 2016*. DOI 10.1145/2994291.2994296.
 - Hodovan, R., Kiss, A. & Gyimothy, T. (2017). "Coarse Hierarchical Delta
-  Debugging." *ICSME 2017*, 194-203.
+  Debugging." *ICSME 2017*, 194-203. DOI 10.1109/ICSME.2017.26.
 - Kiss, A., Hodovan, R. & Gyimothy, T. (2018). "HDDr: A Recursive Variant of the
   Hierarchical Delta Debugging Algorithm." *A-TEST 2018*, 16-22.
   DOI 10.1145/3278186.3278189.
@@ -246,4 +240,4 @@ all query-count and 1-minimality figures quoted above.
   *Quantitative results unverified.*
 - Regehr, J., Chen, Y., Cuoq, P., Eide, E., Ellison, C. & Yang, X. (2012).
   "Test-Case Reduction for C Compiler Bugs." *PLDI 2012*, 335-346.
-  *DOI needs verification.*
+  DOI 10.1145/2345156.2254104.

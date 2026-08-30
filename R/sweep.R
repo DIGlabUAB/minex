@@ -1,5 +1,6 @@
-# Fixed-point verification follows the iteration evaluated by Vince and Kiss
-# (2024), DOI: 10.1002/smr.2702.
+# This repeated singleton-deletion sweep is motivated by the same fixed-point
+# goal studied by Vince and Kiss (2024), DOI: 10.1002/smr.2702, but it is not
+# their DDMIN* algorithm, which repeatedly invokes DDMIN.
 #' @keywords internal
 #' @noRd
 remove_removable_singles <- function(kept, test, progress = NULL) {

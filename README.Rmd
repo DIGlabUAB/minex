@@ -75,9 +75,10 @@ the failure when it errors with the same message as the original; matching on
 the condition class instead, or supplying a custom oracle, is also supported.
 The engine is `ddmin()`. Its default strategy is Counter-Based Delta Debugging
 ([Zhang et al., 2025](https://doi.org/10.1109/ICSE55347.2025.00117)), followed
-by a fixed-point verification sweep
-([Vince and Kiss, 2024](https://doi.org/10.1002/smr.2702)) to ensure the result
-is one-minimal. The classic algorithm of
+by a repeated singleton-deletion sweep to ensure the result is one-minimal.
+This sweep is related to, but is not the DDMIN* algorithm evaluated by
+[Vince and Kiss (2024)](https://doi.org/10.1002/smr.2702). The classic algorithm
+of
 [Zeller and Hildebrandt (2002)](https://doi.org/10.1109/32.988498) remains
 available with `algorithm = "ddmin"`.
 

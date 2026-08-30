@@ -1,8 +1,8 @@
 # minex (development version)
 
 * Corrected the expansion of CDD to Counter-Based Delta Debugging and added
-  primary citations for CDD, HDD/HDD*, and the fixed-point verification sweep
-  throughout the package documentation.
+  primary citations for CDD and HDD/HDD*, plus related work on fixed-point
+  minimization, throughout the package documentation.
 
 # minex 0.2.0
 
@@ -19,9 +19,8 @@
   reduction removes nothing**, instead of returning the input unchanged. This
   is the usual outcome for a script that is one function definition plus a
   call: every top-level statement is load-bearing, but the failure is nested
-  inside the function body where statement bisection cannot reach it. Measured
-  on 61 such scripts, the share that reduce at all went from 10/61 to 61/61,
-  removing a median 47% of characters. The retried result carries
+  inside the function body where statement bisection cannot reach it. The
+  retried result carries
   `escalated_from = "statement"` and `coarse_oracle_calls`, and its `code` is a
   simplification of the original statements rather than a subset of them. Pass
   `granularity = "statement"` explicitly for statement-level reduction only.

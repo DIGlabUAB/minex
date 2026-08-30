@@ -48,9 +48,11 @@
 #' of Probabilistic Delta Debugging." *ICSE 2025*.
 #' \doi{10.1109/ICSE55347.2025.00117}
 #'
-#' Vince D, Kiss A (2024). "Evaluation of the Fixed-Point Iteration of
-#' Minimizing Delta Debugging." *Journal of Software: Evolution and Process*,
-#' 36(10), e2702. \doi{10.1002/smr.2702}
+#' For related work on repeatedly invoking DDMIN to a fixed point, see Vince D,
+#' Kiss A (2024). "Evaluation of the Fixed-Point Iteration of Minimizing Delta
+#' Debugging." *Journal of Software: Evolution and Process*, 36(10), e2702.
+#' \doi{10.1002/smr.2702} The verification sweep used here instead repeatedly
+#' tests singleton deletions; it is not the paper's DDMIN* algorithm.
 #'
 #' @seealso [minex()] for the script-reduction front end and [reduce_rows()] for
 #'   reducing data frames.

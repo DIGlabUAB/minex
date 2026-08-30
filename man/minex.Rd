@@ -183,9 +183,11 @@ of Probabilistic Delta Debugging." \emph{ICSE 2025}.
 Misherghi G, Su Z (2006). "HDD: Hierarchical Delta Debugging." \emph{ICSE 2006},
 142-151. \doi{10.1145/1134285.1134307}
 
-Vince D, Kiss A (2024). "Evaluation of the Fixed-Point Iteration of
-Minimizing Delta Debugging." \emph{Journal of Software: Evolution and Process},
-36(10), e2702. \doi{10.1002/smr.2702}
+For related work on repeatedly invoking DDMIN to a fixed point, see Vince D,
+Kiss A (2024). "Evaluation of the Fixed-Point Iteration of Minimizing Delta
+Debugging." \emph{Journal of Software: Evolution and Process}, 36(10), e2702.
+\doi{10.1002/smr.2702} The verification sweep used here instead repeatedly
+tests singleton deletions; it is not the paper's DDMIN* algorithm.
 }
 \seealso{
 \code{\link[=ddmin]{ddmin()}} for the underlying algorithm and \code{\link[=reduce_rows]{reduce_rows()}} for

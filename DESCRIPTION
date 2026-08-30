@@ -10,20 +10,19 @@ Authors@R: c(
            comment = c(ORCID = "0000-0001-9522-4020")))
 Description: Shrinks a failing R script to the smallest subset of statements
     that still triggers the same error, using Counter-Based Delta Debugging of
-    Zhang et al. (2025) <doi:10.1109/ICSE55347.2025.00117> followed by the
-    fixed-point verification approach evaluated by Vince and Kiss (2024)
-    <doi:10.1002/smr.2702>. Each candidate reduction is evaluated in a separate
-    R process, so dependencies between statements and their side effects are
-    respected. The result is a one-minimal example, in which removing any
-    remaining statement makes the error disappear; this is the form most useful
-    for bug reports and for questions on community forums. When no statement can
-    be removed because the failure is nested inside a function body, reduction
-    continues within the surviving statements using Hierarchical Delta
-    Debugging of Misherghi and Su (2006) <doi:10.1145/1134285.1134307>. The
-    classic algorithm of Zeller and Hildebrandt (2002)
-    <doi:10.1109/32.988498> is also available. A general delta debugging routine
-    and a helper for reducing data frames to the rows that reproduce a failure
-    are also provided.
+    Zhang et al. (2025) <doi:10.1109/ICSE55347.2025.00117> followed by a repeated
+    singleton verification sweep. Each candidate reduction is evaluated in a
+    separate R process, so dependencies between statements and their side
+    effects are respected. The result is a one-minimal example, in which
+    removing any remaining statement makes the error disappear; this is the
+    form most useful for bug reports and for questions on community forums. When
+    no statement can be removed because the failure is nested inside a function
+    body, reduction continues within the surviving statements using
+    Hierarchical Delta Debugging of Misherghi and Su (2006)
+    <doi:10.1145/1134285.1134307>. The classic algorithm of Zeller and
+    Hildebrandt (2002) <doi:10.1109/32.988498> is also available. A general delta
+    debugging routine and a helper for reducing data frames to the rows that
+    reproduce a failure are also provided.
 License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
