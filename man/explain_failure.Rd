@@ -21,7 +21,7 @@ explain_failure(
 
 \item{verify_fix}{Logical. Run the proposed fix to check the failure is gone.}
 
-\item{timeout}{Seconds for the sandboxed fix execution.}
+\item{timeout}{Seconds allowed for fix execution in the isolated R process.}
 
 \item{session_info}{Logical. Include \code{utils::sessionInfo()} in the bug report.}
 
@@ -41,6 +41,11 @@ suggested \code{ellmer} package and a configured chat backend.
 fix is run in a fresh \code{callr} process with a timeout. \code{callr} isolates R
 session state, not the OS; a fix may still have side effects. Use
 \code{verify_fix = FALSE} for input you would not run yourself.
+
+Prompt-level data framing and the source-text call denylist are
+defense-in-depth mitigations, not security boundaries. Code supplied to the
+model can influence its output, and aliases or dynamic evaluation can evade
+the denylist. See the OWASP Prompt Injection guidance in the references.
 }
 \examples{
 \dontrun{
@@ -52,4 +57,8 @@ res <- minex(tmp, backend = "inprocess")
 explain_failure(res, chat = ellmer::chat_ollama(model = "llama3.2"),
                 verify_fix = FALSE)
 }
+}
+\references{
+OWASP Foundation. "LLM01:2025 Prompt Injection."
+\url{https://genai.owasp.org/llmrisk/llm01-prompt-injection/}
 }

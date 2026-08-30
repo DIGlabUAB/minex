@@ -17,7 +17,8 @@ test_that("build_prompt embeds code + error and frames code as data", {
                     session_info = FALSE)
   expect_match(p, "mean is NA")
   expect_match(p, "x <- c\\(1, 2, NA\\)")
-  expect_match(p, "data to analyze")  # injection framing present
+  # Prompt-level framing is present; it is not asserted to prevent injection.
+  expect_match(p, "data to analyze")
 })
 
 test_that("build_prompt honors session_info", {

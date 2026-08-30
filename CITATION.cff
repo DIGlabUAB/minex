@@ -1,0 +1,17 @@
+cff-version: 1.2.0
+message: "If you use minex in your work, please cite it using the metadata below."
+title: "minex: Automatically Reduce Failing R Scripts to a Minimal Reproducible Example"
+type: software
+authors:
+  - family-names: Bodduluri
+    given-names: Sandeep
+    orcid: "https://orcid.org/0000-0001-8201-5262"
+  - family-names: Chandrupatla
+    given-names: Sumanth
+    orcid: "https://orcid.org/0000-0001-9522-4020"
+version: 0.2.0
+date-released: 2026-08-29
+doi: "10.32614/CRAN.package.minex"
+url: "https://CRAN.R-project.org/package=minex"
+repository-code: "https://github.com/DIGlabUAB/minex"
+license: MIT

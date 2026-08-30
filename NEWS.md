@@ -1,3 +1,13 @@
+# minex (development version)
+
+* Corrected the expansion of CDD to Counter-Based Delta Debugging and added
+  primary citations for CDD and HDD/HDD*, plus related work on fixed-point
+  minimization, throughout the package documentation. Documentation now
+  distinguishes the package's adaptations from the papers' exact algorithms.
+* Clarified that LLM-proposed fixes run in an isolated process, not an operating
+  system sandbox, and that prompt framing and the call denylist are mitigations,
+  not security boundaries.
+
 # minex 0.2.0
 
 * `explain_failure()` sends a `minex()` result to an LLM (via the suggested
@@ -6,15 +16,15 @@
   diagnosis. Provider-agnostic: works with any `ellmer`-supported backend
   (OpenAI, Anthropic, Ollama, OpenRouter, etc.).
 * `minex(granularity = "expression")` reduces *within* a statement, isolating
-  a failing pipeline stage (`|>`/`%>%`) or positional call argument via
-  Hierarchical Delta Debugging (HDD*).
+  a failing pipeline stage (`|>`/`%>%`) or positional call argument via a
+  specialized HDD*-style pass (Misherghi and Su, 2006,
+  <doi:10.1145/1134285.1134307>).
 * **`minex()` now retries at `granularity = "expression"` when statement-level
   reduction removes nothing**, instead of returning the input unchanged. This
   is the usual outcome for a script that is one function definition plus a
   call: every top-level statement is load-bearing, but the failure is nested
-  inside the function body where statement bisection cannot reach it. Measured
-  on 61 such scripts, the share that reduce at all went from 10/61 to 61/61,
-  removing a median 47% of characters. The retried result carries
+  inside the function body where statement bisection cannot reach it. The
+  retried result carries
   `escalated_from = "statement"` and `coarse_oracle_calls`, and its `code` is a
   simplification of the original statements rather than a subset of them. Pass
   `granularity = "statement"` explicitly for statement-level reduction only.
@@ -38,7 +48,9 @@
 * Failure-point truncation drops statements after the failure for free.
 * `max_oracle_calls` bounds the search; incomplete results are labelled
   `complete = FALSE`, print a note, and emit a warning.
-* New `algorithm = "cdd"` (Counting-based Delta Debugging, Zhang et al. 2025)
+* New `algorithm = "cdd"` (adapted from Counter-Based Delta Debugging,
+  Zhang et al. 2025,
+  <doi:10.1109/ICSE55347.2025.00117>)
   alongside the classic `"ddmin"`. **`"cdd"` is now the default algorithm**
   for `minex()`, `ddmin()`, and `reduce_rows()`; the classic `"ddmin"` block-
   halving loop remains available via `algorithm = "ddmin"`.

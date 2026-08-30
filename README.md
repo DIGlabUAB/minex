@@ -15,9 +15,11 @@ experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](h
 When you ask for help with R, you are told to post a minimal
 reproducible example. The `reprex` package runs and formats your code;
 it does not shrink it. `minex` shrinks it: paste in a failing script and
-it returns the smallest subset of statements that still throws the same
+it returns a one-minimal set of statements that still throws the same
 error, finding it by delta debugging rather than by deleting lines and
-re-running by hand.
+re-running by hand. One-minimal means no remaining statement can be
+removed individually while preserving the failure; it does not claim the
+globally smallest possible script.
 
 ## Installation
 
@@ -70,8 +72,20 @@ Each candidate reduction runs in a fresh R process (via `callr`) so that
 statement dependencies and side effects are respected. A candidate
 “reproduces” the failure when it errors with the same message as the
 original; matching on the condition class instead, or supplying a custom
-oracle, is also supported. The engine is `ddmin()`, an implementation of
-the delta debugging algorithm of Zeller and Hildebrandt (2002), exposed
-for reuse on any collection.
+oracle, is also supported. The engine is `ddmin()`. Its default strategy
+adapts the counter-based block sizing of [Zhang et
+al. (2025)](https://doi.org/10.1109/ICSE55347.2025.00117), restarting
+the round counter after each successful reduction. A repeated
+singleton-deletion sweep then ensures the result is one-minimal. This
+sweep is related to, but is not the DDMIN\* algorithm evaluated by
+[Vince and Kiss (2024)](https://doi.org/10.1002/smr.2702). The classic
+algorithm of [Zeller and Hildebrandt
+(2002)](https://doi.org/10.1109/32.988498) remains available with
+`algorithm = "ddmin"`.
+
+If nothing can be removed at statement level, `minex()` automatically
+descends into pipeline stages and positional call arguments using a
+specialized HDD\*-style pass ([Misherghi and Su,
+2006](https://doi.org/10.1145/1134285.1134307)).
 
 See `vignette("minex")` for the full walkthrough.

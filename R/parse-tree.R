@@ -134,8 +134,8 @@ pt_call_args <- function(text) {
     # Grouping parens `(a + b)` have '(' as their very first child (no expr
     # precedes it); control-flow parens (`if (...)`, `for (...)`, `while
     # (...)`) are preceded by a keyword token (IF/FOR/WHILE), not an expr.
-    # Verified empirically against getParseData for f(...), (a + b),
-    # if (...) foo(...), for (...) g(...), pkg::fn(...), and x$m(...).
+    # Regression coverage includes f(...), (a + b), if (...) foo(...),
+    # for (...) g(...), pkg::fn(...), and x$m(...); see test-parse-tree.R.
     has_callee <- any(kids$token == "expr" &
                          (kids$col1 + 1000L * kids$line1) < paren_key)
     if (!has_callee) next
