@@ -7,6 +7,9 @@
 * Clarified that LLM-proposed fixes run in an isolated process, not an operating
   system sandbox, and that prompt framing and the call denylist are mitigations,
   not security boundaries.
+* The development benchmark harness saves every case to CSV, including errors
+  and incomplete reductions, with elapsed time, diagnostics, and environment
+  and Git provenance. It exits nonzero after saving unsuccessful runs.
 
 # minex 0.2.0
 
