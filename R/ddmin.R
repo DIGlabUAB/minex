@@ -33,7 +33,9 @@
 #'   a fixed-point verification sweep that removes any remaining removable
 #'   single elements.
 #' @param max_oracle_calls Numeric. An upper bound on the number of predicate
-#'   evaluations. Must be at least 1. When the budget is exhausted the reduction
+#'   evaluations, including the full-set precondition test. Must be a numeric
+#'   scalar, a whole number at least 1 or `Inf`. Cache hits do not consume it.
+#'   When the budget is exhausted the reduction
 #'   stops early and returns the smallest set confirmed so far; the result is
 #'   still guaranteed to reproduce the behavior but may not be one-minimal.
 #' @param verbose Logical or character. If `TRUE`, report each reduction phase
@@ -83,9 +85,7 @@ ddmin <- function(items, interesting,
     stop("`interesting` must be a function.", call. = FALSE)
   }
   algorithm <- match.arg(algorithm)
-  if (max_oracle_calls < 1) {
-    stop("`max_oracle_calls` must be at least 1.", call. = FALSE)
-  }
+  validate_oracle_budget(max_oracle_calls)
   n_items <- length(items)
   if (n_items == 0L) {
     if (is.environment(.info)) {
@@ -94,49 +94,36 @@ ddmin <- function(items, interesting,
     return(items)
   }
 
+  context <- oracle_context(interesting)
+  shared <- !is.null(context)
+  if (!shared) context <- new_oracle_context(max_oracle_calls, verbose)
+  calls_before <- context$calls
+  trace_before <- length(context$rows)
   cache <- new.env(parent = emptyenv())
-  calls <- 0L
   complete <- TRUE
-  trace_rows <- list()
   phase <- "reduce"       # updated to "verify" before the sweep
-  do_trace <- wants_trace(verbose)
   say <- function(...) if (verbose_enabled(verbose)) message("minex: ", ...)
 
-  # `exempt = TRUE` skips only the budget-LIMIT CHECK for the mandatory
-  # precondition test; the call still increments `calls`. So with
-  # max_oracle_calls = 1 the precondition runs (calls -> 1) and the first
-  # reduce-phase call then trips the limit -> complete = FALSE. This is
-  # intended: a budget under the minimum needed yields an honest incomplete.
-  test <- function(idx, exempt = FALSE) {
+  test <- function(idx) {
     idx <- sort(unique(idx))
     key <- paste(idx, collapse = ",")
+    context$phase <- phase
+    context$size <- length(idx)
     cached <- cache[[key]]
-    is_cached <- !is.null(cached)
-    if (!is_cached && !exempt && calls >= max_oracle_calls) {
-      if (do_trace) {
-        trace_rows[[length(trace_rows) + 1L]] <<- list(
-          call = calls, phase = phase, size = length(idx),
-          kept = NA, cached = FALSE, event = "budget_exhausted")
-      }
-      stop(structure(
-        class = c("minex_oracle_limit_reached", "error", "condition"),
-        list(message = "oracle call budget exhausted", call = NULL)
-      ))
+    if (!is.null(cached)) {
+      oracle_trace(context, cached, cached = TRUE)
+      return(cached)
     }
-    result <- if (is_cached) cached else isTRUE(interesting(items[idx]))
-    if (!is_cached) {
-      calls <<- calls + 1L
-      assign(key, result, envir = cache)
+    result <- if (shared) {
+      isTRUE(interesting(items[idx]))
+    } else {
+      oracle_test(context, key, function() interesting(items[idx]))
     }
-    if (do_trace) {
-      trace_rows[[length(trace_rows) + 1L]] <<- list(
-        call = calls, phase = phase, size = length(idx),
-        kept = result, cached = is_cached, event = "")
-    }
+    assign(key, result, envir = cache)
     result
   }
 
-  if (!test(seq_len(n_items), exempt = TRUE)) {
+  if (!test(seq_len(n_items))) {
     stop("`interesting` is FALSE for the full set; nothing to minimize.",
          call. = FALSE)
   }
@@ -165,9 +152,14 @@ ddmin <- function(items, interesting,
   )
 
   if (is.environment(.info)) {
-    .info$oracle_calls <- calls
+    .info$oracle_calls <- context$calls - calls_before
     .info$complete <- complete
-    .info$trace <- build_trace(trace_rows)
+    .info$trace <- if (length(context$rows) > trace_before) {
+      build_trace(context$rows[seq.int(trace_before + 1L, length(context$rows))])
+    } else NULL
+    if (!shared && !is.null(.info$trace)) {
+      .info$trace <- .info$trace[c("call", "phase", "size", "kept", "cached", "event")]
+    }
   }
   items[kept]
 }

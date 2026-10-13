@@ -46,12 +46,11 @@ test_that("minex re-sweeps statements made redundant by sub-expression reduction
 
 test_that("minex counts the failure-point truncation probe in oracle_calls", {
   # Failure at statement 1 of 2 -> truncation to [1] fires exactly one real oracle
-  # probe. The reported oracle_calls must include it: 1 probe + 1 ddmin precondition
-  # (a one-statement set needs no further reduction). The one-time target-recording
-  # run is not a predicate evaluation and is not counted.
+  # probe. Its cached result satisfies ddmin's precondition without another run.
+  # The initial target observation is not a predicate evaluation and is excluded.
   res <- minex(code = c("stop('boom')", "y <- 1"), backend = "inprocess")
   expect_equal(res$n_minimal, 1L)
-  expect_equal(res$oracle_calls, 2L)
+  expect_equal(res$oracle_calls, 1L)
 })
 
 test_that("minex reads from a file", {
@@ -138,7 +137,7 @@ test_that("minex warns on multiple input sources (code wins, resolves cleanly)",
 test_that("minex reports incomplete under a tight budget", {
   # Jointly-required, non-adjacent statements force several oracle calls, so a
   # budget of 1 genuinely truncates the search.
-  script <- c("a <- 1", "b <- 2", "c <- 3", "stop('boom')")
+  script <- c("a <- 1", "b <- 2", "c <- 3", "stop(a + c)")
   res <- suppressWarnings(
     minex(code = script, backend = "inprocess", max_oracle_calls = 1L)
   )

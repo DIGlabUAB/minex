@@ -17,8 +17,12 @@
 #'   of `"cdd"` (the default CDD adaptation) or `"ddmin"`. Passed through to
 #'   [ddmin()].
 #' @param max_oracle_calls Numeric. An upper bound on the number of predicate
-#'   calls. Passed through to [ddmin()].
-#' @param verbose Logical. If `TRUE`, report progress.
+#'   calls, including the full-data precondition test. Passed through to [ddmin()].
+#'   Incomplete reductions emit a warning and return the smallest confirmed subset.
+#' @param verbose Logical or character. If `TRUE`, report progress; `"trace"`
+#'   records a per-call trace in `.info`.
+#' @param .info Optional environment receiving `oracle_calls`, `complete`, and
+#'   `trace`, as in [ddmin()]. The returned data frame has no added attributes.
 #'
 #' @return A data frame containing the one-minimal subset of rows.
 #'
@@ -32,7 +36,8 @@
 reduce_rows <- function(data, predicate,
                         algorithm = c("cdd", "ddmin"),
                         max_oracle_calls = Inf,
-                        verbose = FALSE) {
+                        verbose = FALSE,
+                        .info = NULL) {
   algorithm <- match.arg(algorithm)
   if (!is.data.frame(data)) {
     stop("`data` must be a data frame.", call. = FALSE)
@@ -40,19 +45,26 @@ reduce_rows <- function(data, predicate,
   if (!is.function(predicate)) {
     stop("`predicate` must be a function.", call. = FALSE)
   }
+  validate_oracle_budget(max_oracle_calls)
   if (nrow(data) == 0L) {
+    if (is.environment(.info)) {
+      .info$oracle_calls <- 0L; .info$complete <- TRUE; .info$trace <- NULL
+    }
     return(data)
   }
-  if (!isTRUE(predicate(data))) {
-    stop("`predicate` is FALSE for the full data; nothing to minimize.",
-         call. = FALSE)
-  }
 
+  info <- if (is.environment(.info)) .info else new.env(parent = emptyenv())
   keep <- ddmin(
     seq_len(nrow(data)),
     function(rows) isTRUE(predicate(data[sort(rows), , drop = FALSE])),
-    algorithm = algorithm, max_oracle_calls = max_oracle_calls, verbose = verbose
+    algorithm = algorithm, max_oracle_calls = max_oracle_calls, verbose = verbose,
+    .info = info
   )
+  if (!isTRUE(info$complete)) {
+    warning("reduce_rows stopped early; returned rows still satisfy `predicate` ",
+            "but may be reducible. Re-run with a higher `max_oracle_calls`.",
+            call. = FALSE)
+  }
 
   data[sort(keep), , drop = FALSE]
 }
