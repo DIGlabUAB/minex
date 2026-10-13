@@ -17,7 +17,7 @@ test_that("minex escalates to expression granularity when statements cannot redu
   expect_lt(res$n_chars_minimal, res$n_chars_original)
 })
 
-test_that("escalation records the cost of the discarded coarse pass", {
+test_that("escalation records the cost of the initial coarse pass", {
   res <- minex(code = nested_failure, backend = "inprocess")
   expect_true(is.numeric(res$coarse_oracle_calls))
   expect_gt(res$coarse_oracle_calls, 0)
@@ -49,8 +49,7 @@ test_that("the escalated result still reproduces the original failure", {
 # what the coarse pass left rather than on a fresh budget. Without this the
 # bound is silently doubled.
 test_that("escalation spends the remaining budget, not a fresh one", {
-  # Unbudgeted, this script costs 3 coarse calls plus 10 fine ones.
-  budget <- 12
+  budget <- 3L
   res <- suppressWarnings(
     minex(code = nested_failure, backend = "inprocess",
           max_oracle_calls = budget))
@@ -62,22 +61,19 @@ test_that("escalation spends the remaining budget, not a fresh one", {
 # established that nothing is removable, so it is not grounds to escalate.
 test_that("no escalation when the coarse pass exhausted its budget", {
   res <- suppressWarnings(
-    minex(code = nested_failure, backend = "inprocess", max_oracle_calls = 2))
+    minex(code = nested_failure, backend = "inprocess", max_oracle_calls = 1))
   expect_equal(res$granularity, "statement")
   expect_null(res$escalated_from)
   expect_false(res$complete)
 })
 
-test_that("oracle_calls on an escalated result counts both passes", {
+test_that("escalation reuses the initial pass rather than repeating it", {
   res <- minex(code = nested_failure, backend = "inprocess")
-  # Derive the expectation from the two passes the escalation is made of,
-  # rather than from a literal, so this pins the contract and not one script.
   statement_only <- minex(code = nested_failure, backend = "inprocess",
                           granularity = "statement")
   expression_only <- minex(code = nested_failure, backend = "inprocess",
                            granularity = "expression")
   expect_equal(res$coarse_oracle_calls, statement_only$oracle_calls)
-  # The discarded coarse pass was still work the caller paid for.
-  expect_equal(res$oracle_calls,
-               statement_only$oracle_calls + expression_only$oracle_calls)
+  expect_equal(res$oracle_calls, expression_only$oracle_calls)
+  expect_gt(res$oracle_calls, res$coarse_oracle_calls)
 })

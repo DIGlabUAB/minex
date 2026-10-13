@@ -57,11 +57,19 @@ hdd_reducible_by_depth <- function(text) {
 #' @noRd
 hdd_star <- function(text, reproduces, max_oracle_calls = Inf, info = new.env(),
                      verbose = FALSE) {
+  validate_oracle_budget(max_oracle_calls)
+  context <- oracle_context(reproduces)
+  if (is.null(context)) {
+    context <- new_oracle_context(max_oracle_calls, verbose)
+    reproduces <- oracle_wrap(reproduces, context)
+  } else if (identical(context$owner, "hdd_memo")) {
+    context$max_calls <- context$budget_calls + max_oracle_calls
+    context$verbose <- verbose
+  }
+  calls_before <- context$calls
+  trace_before <- length(context$rows)
   current <- text
-  total_calls <- 0L
   complete <- TRUE
-  do_trace <- wants_trace(verbose)
-  trace_parts <- list()
   repeat {                                   # outer fixpoint => HDD*
     levels <- hdd_reducible_by_depth(current)
     if (length(levels) == 0L) break
@@ -69,28 +77,23 @@ hdd_star <- function(text, reproduces, max_oracle_calls = Inf, info = new.env(),
     for (level in levels) {                  # shallow -> deep
       before <- current
       sub <- new.env()
-      remaining <- if (is.finite(max_oracle_calls)) max_oracle_calls - total_calls else Inf
-      if (is.finite(remaining) && remaining < 1) { complete <- FALSE; break }
       # ddmin over this level's spans: item = a span; interesting = candidate
       # with the KEPT spans re-inserted (i.e. delete the NON-kept spans) reproduces.
       idx <- seq_along(level)
-      interesting <- function(keep_idx) {
+      context$level <- level[[1]]$depth
+      interesting <- oracle_inherit(function(keep_idx) {
         drop <- setdiff(idx, keep_idx)
         cand <- pt_delete(current, level[drop])
-        if (!pt_parses(cand)) return(FALSE)   # free reparse reject (no budget)
+        if (!pt_parses(cand)) {
+          oracle_trace(context, FALSE, event = "parse_rejected")
+          return(FALSE)
+        }
         isTRUE(reproduces(cand))
-      }
+      }, context)
       # We want a one-minimal set of spans to KEEP such that dropping the rest
       # still reproduces; ddmin finds that keep-set, then we delete the rest.
-      kept <- ddmin(idx, function(k) interesting(k),
-                    max_oracle_calls = remaining, verbose = verbose, .info = sub)
-      lvl_calls <- sub$oracle_calls %||% 0L
+      kept <- ddmin(idx, interesting, verbose = verbose, .info = sub)
       if (!isTRUE(sub$complete)) complete <- FALSE
-      if (do_trace && !is.null(sub$trace)) {
-        tagged <- sub$trace
-        tagged$level <- level[[1]]$depth
-        trace_parts[[length(trace_parts) + 1L]] <- tagged
-      }
       # ddmin NEVER returns an empty keep-set (sweep.R guards `length(kept) > 1`
       # and cdd_reduce rejects empty complements). So a depth level whose spans
       # are ALL unnecessary would keep one spurious span, violating the spec's
@@ -102,26 +105,26 @@ hdd_star <- function(text, reproduces, max_oracle_calls = Inf, info = new.env(),
       # budget-gated oracle call. When the culprit IS that span, the probe
       # candidate does not reproduce and the span is kept (no over-deletion).
       if (length(kept) == 1L && isTRUE(sub$complete)) {
-        rem2 <- if (is.finite(max_oracle_calls)) max_oracle_calls - total_calls - lvl_calls else Inf
-        if (!is.finite(rem2) || rem2 >= 1) {
-          whole <- pt_delete(current, level)
-          if (pt_parses(whole)) {
-            lvl_calls <- lvl_calls + 1L
+        context$phase <- "verify_empty"
+        context$size <- 0L
+        whole <- pt_delete(current, level)
+        if (pt_parses(whole)) {
+          tryCatch({
             if (isTRUE(reproduces(whole))) kept <- integer(0)
-          }
-        }
+          }, minex_oracle_limit_reached = function(e) complete <<- FALSE)
+        } else oracle_trace(context, FALSE, event = "parse_rejected")
       }
-      total_calls <- total_calls + lvl_calls
       current <- pt_delete(current, level[setdiff(idx, kept)])
+      if (!complete) break
       if (!identical(current, before)) { progressed <- TRUE; break }  # reparse
     }
-    if (!progressed) break
+    if (!complete || !progressed) break
   }
-  info$oracle_calls <- total_calls
+  info$oracle_calls <- context$calls - calls_before
   info$complete <- complete
-  if (do_trace) {
-    info$trace <- if (length(trace_parts) == 0L) NULL else do.call(rbind, trace_parts)
-  }
+  info$trace <- if (length(context$rows) > trace_before) {
+    build_trace(context$rows[seq.int(trace_before + 1L, length(context$rows))])
+  } else NULL
   current
 }
 
@@ -130,13 +133,7 @@ hdd_star <- function(text, reproduces, max_oracle_calls = Inf, info = new.env(),
 #' @keywords internal
 #' @noRd
 hdd_make_oracle <- function(run_reproduces) {
-  memo <- new.env(parent = emptyenv())
-  function(text) {
-    key <- text
-    hit <- memo[[key]]
-    if (!is.null(hit)) return(hit)
-    val <- isTRUE(run_reproduces(text))
-    assign(key, val, envir = memo)
-    val
-  }
+  context <- new_oracle_context()
+  context$owner <- "hdd_memo"
+  oracle_wrap(run_reproduces, context)
 }

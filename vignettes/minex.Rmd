@@ -81,13 +81,20 @@ original. This is usually the right choice: an over-reduced fragment tends to
 fail differently (often "object not found"), and message matching rejects it.
 
 If the message embeds changing details such as a value or an index, match on the
-condition *class* instead:
+condition's specific *class* instead:
 
 ```{r}
 minex(code = script, match = "class", backend = "inprocess")
 ```
 
-Use `match = "both"` to require the message and a shared class.
+Class matching requires a shared specific class, such as `DomainError`.
+The standard `error`, `warning`, `message`, `condition`, `simpleError`,
+`simpleWarning`, and `simpleMessage` classes cannot identify a particular
+failure. If the target has only those generic classes, class matching also
+requires the same message and a compatible generic class when available, so an
+unrelated base R error does not qualify.
+
+Use `match = "both"` to require the message and the same class-matching rule.
 
 ## Minimizing against an arbitrary condition
 
@@ -143,13 +150,24 @@ and `%>%`) and positional call arguments. You can request it directly with
 `granularity = "expression"`, or suppress the automatic retry by explicitly
 passing `granularity = "statement"`.
 
+The statement and expression passes share a source cache and one oracle-call
+budget, including final verification. Cache hits and parse rejects are free.
+Initial target observation is excluded from `oracle_calls`; a failure-point
+truncation probe is counted but exempt from the search budget. When an observed
+source reproduces the target, later passes reuse its result.
+
 ## Limitations
 
-`minex()` targets R-level conditions (errors). Failures that crash the R process
-or hang are not captured as conditions; with the `callr` backend they are simply
-treated as not reproducing the target. Expression-level reduction is currently
-limited to pipeline stages and positional call arguments; it does not rewrite
-arbitrary R syntax.
+`minex()` targets R-level conditions. A backend timeout or process failure is
+reported as an unobserved evaluation rather than evidence that the target is
+absent. An unobserved input raises `minex_evaluation_error`; unobserved candidate
+evaluations retain confirmed progress, set `complete = FALSE`, and appear in
+`evaluation_failures`.
+
+Expression-level reduction is limited to pipeline stages and positional call
+arguments; it does not rewrite arbitrary R syntax. Calls containing missing
+argument slots are left intact, though nested calls with complete argument lists
+can still be reduced.
 
 ## References
 

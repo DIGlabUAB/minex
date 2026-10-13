@@ -40,7 +40,7 @@ script <- c(
 )
 
 minex(code = script)
-#> <minex_result> 3 statement(s) reduced to 1 (3 oracle call(s))
+#> <minex_result> 3 statement(s) reduced to 1 (2 oracle call(s))
 #> target failure: non-numeric argument to mathematical function
 #> ------------------------------------------------
 #> log('not a number')
@@ -71,9 +71,11 @@ reduce_rows(df, function(d) any(d$value > 100))
 Each candidate reduction runs in a fresh R process (via `callr`) so that
 statement dependencies and side effects are respected. A candidate
 “reproduces” the failure when it errors with the same message as the
-original; matching on the condition class instead, or supplying a custom
-oracle, is also supported. The engine is `ddmin()`. Its default strategy
-adapts the counter-based block sizing of [Zhang et
+original; matching on the specific condition class instead, or supplying
+a custom oracle, is also supported. Class matching falls back to the
+same message when the target has only generic condition classes. The
+engine is `ddmin()`. Its default strategy adapts the counter-based block
+sizing of [Zhang et
 al. (2025)](https://doi.org/10.1109/ICSE55347.2025.00117), restarting
 the round counter after each successful reduction. A repeated
 singleton-deletion sweep then ensures the result is one-minimal. This

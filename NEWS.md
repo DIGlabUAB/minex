@@ -1,5 +1,23 @@
 # minex (development version)
 
+* Expression reduction now uses full source positions, including tab expansion,
+  Unicode text, and multiline pipelines. Deleting overlapping argument spans
+  preserves the surviving arguments and their separators.
+* Class matching requires a shared specific condition class. For conditions
+  with only generic classes, it also requires the same message, preventing an
+  unrelated error from replacing the target failure.
+* In-process evaluations restore newly added options as well as changed and
+  removed options, so candidate evaluations cannot inherit option setup from
+  earlier candidates.
+* Unobserved input raises a `minex_evaluation_error` with the backend cause.
+  Unobserved candidates retain confirmed progress, carry `evaluation_failures`,
+  and mark the result incomplete instead of establishing one-minimality.
+* Statement reduction, expression reduction, verification, and automatic
+  escalation share one oracle cache, budget, and trace. Reported calls count
+  actual predicate evaluations; cache hits and parse rejects are free. A final
+  deletion that cannot be tested within budget leaves the result incomplete.
+* `reduce_rows()` tests its full-data precondition once, warns on incomplete
+  reduction, and accepts `.info` for call counts, completion, and trace metadata.
 * Corrected the expansion of CDD to Counter-Based Delta Debugging and added
   primary citations for CDD and HDD/HDD*, plus related work on fixed-point
   minimization, throughout the package documentation. Documentation now

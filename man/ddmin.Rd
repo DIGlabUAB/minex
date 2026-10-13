@@ -30,7 +30,9 @@ a fixed-point verification sweep that removes any remaining removable
 single elements.}
 
 \item{max_oracle_calls}{Numeric. An upper bound on the number of predicate
-evaluations. Must be at least 1. When the budget is exhausted the reduction
+evaluations, including the full-set precondition test. Must be a numeric
+scalar, a whole number at least 1 or \code{Inf}. Cache hits do not consume it.
+When the budget is exhausted the reduction
 stops early and returns the smallest set confirmed so far; the result is
 still guaranteed to reproduce the behavior but may not be one-minimal.}
 
