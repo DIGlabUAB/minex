@@ -90,8 +90,11 @@
 #'   calls with complete argument lists can still be reduced. This pass
 #'   does not reduce every R syntax-tree node. When
 #'   such a reduction makes an earlier statement redundant (for example a value
-#'   dropped from a later call), that statement is swept out, so the result stays
-#'   statement one-minimal.
+#'   dropped from a later call), that statement is swept out. Both passes repeat
+#'   against the latest confirmed code until neither changes, so a later edit
+#'   can unlock an earlier expression even for a non-monotone oracle. A completed
+#'   result is statement one-minimal and admits no single supported expression
+#'   deletion that preserves the oracle; it need not be globally smallest.
 #'
 #'   When `granularity` is left at its default *and* statement-level reduction
 #'   removes nothing, `minex()` retries once at `"expression"` rather than
@@ -110,7 +113,7 @@
 #'   current ID; reuse of the initial target can therefore have ID 0. Rows with
 #'   `cached = FALSE` and an empty `event` correspond to actual evaluations.
 #'   Phases are `"truncate"`, `"reduce"`, `"verify"`, `"verify_empty"`,
-#'   `"joint_verify"`, and `"post_hdd_verify"`; events include
+#'   and `"post_hdd_verify"`; events include
 #'   `"budget_exhausted"` and `"parse_rejected"`. For
 #'   `granularity = "expression"`, the HDD trace rows additionally carry `stmt_index`
 #'   (which statement they reduced) and `level` (the HDD tree depth); the
@@ -298,7 +301,6 @@ minex <- function(file = NULL,
 
   code_out <- minimal
   complete <- isTRUE(info$complete)
-  jointly_failed <- FALSE                    # per-statement reductions didn't compose
   escalated <- FALSE
   coarse_calls <- NULL
   # Descend within the same context: keep the original target, confirmed source
@@ -311,59 +313,55 @@ minex <- function(file = NULL,
     escalated <- TRUE
     coarse_calls <- context$calls
   }
-  if (granularity == "expression") {
-    for (i in seq_along(minimal)) {
-      # reproduce(cand_text): replace statement i with the candidate, run the
-      # whole kept set through the existing oracle (run_code + matcher).
-      reproduces <- oracle_inherit(local({
-        idx_i <- i
-        function(cand_text) {
-          cand_set <- minimal
-          cand_set[idx_i] <- cand_text
-          isTRUE(oracle(cand_set))
-        }
-      }), context)
-      sub <- new.env()
-      oracle_metadata(context, "reduce", length(minimal), stmt_index = i)
-      code_out[i] <- hdd_star(minimal[i], reproduces, info = sub,
-                              verbose = verbose)
-      if (!isTRUE(sub$complete)) complete <- FALSE
-    }
-
-    # Each statement was reduced against the OTHERS held at their un-reduced
-    # (`minimal`) form, so independently-valid per-statement reductions can
-    # still fail to reproduce when combined. Joint-verify the assembled
-    # `code_out` before trusting it; fall back to the known-good `minimal`
-    # when the composition doesn't hold or can't be confirmed.
-    if (!identical(code_out, minimal)) {
-      oracle_metadata(context, "joint_verify", length(code_out))
-      unknown_before <- length(evaluation_failures)
-      joint <- tryCatch(oracle(code_out), minex_oracle_limit_reached = function(e) NA)
-      if (!isTRUE(joint)) {
-        code_out <- minimal
-        jointly_failed <- !is.na(joint) && length(evaluation_failures) == unknown_before
-        complete <- FALSE
-      } else {
-        # HDD can make earlier statements redundant. Re-sweep to a fixpoint,
-        # sharing the same source cache, budget, and confirmation guarantees.
-        repeat {
-          removed_any <- FALSE
-          i <- 1L
-          while (i <= length(code_out) && length(code_out) > 1L) {
-            oracle_metadata(context, "post_hdd_verify", length(code_out) - 1L)
-            removable <- tryCatch(oracle(code_out[-i]),
-              minex_oracle_limit_reached = function(e) NA)
-            if (is.na(removable)) { complete <- FALSE; break }
-            if (isTRUE(removable)) {
-              code_out <- code_out[-i]   # element now at i is new; do not advance
-              removed_any <- TRUE
-            } else {
-              i <- i + 1L
-            }
+  if (granularity == "expression" && complete) {
+    repeat {
+      before <- code_out
+      for (i in seq_along(code_out)) {
+        # Commit each reduction against the latest confirmed whole program.
+        # Independently reducing statements against a stale baseline can make
+        # their combination invalid, even when both reductions passed alone.
+        reproduces <- oracle_inherit(local({
+          idx_i <- i
+          function(cand_text) {
+            cand_set <- code_out
+            cand_set[idx_i] <- cand_text
+            isTRUE(oracle(cand_set))
           }
-          if (!removed_any || is.na(removable)) break
+        }), context)
+        sub <- new.env()
+        oracle_metadata(context, "reduce", length(code_out), stmt_index = i)
+        code_out[i] <- hdd_star(code_out[i], reproduces, info = sub,
+                                verbose = verbose)
+        if (!isTRUE(sub$complete)) {
+          complete <- FALSE
+          break
         }
       }
+      if (!complete) break
+
+      # Expression changes can make whole statements redundant. Statement
+      # deletions and later expression changes can in turn unlock reductions
+      # in earlier statements, so repeat BOTH passes until neither changes.
+      i <- 1L
+      while (i <= length(code_out) && length(code_out) > 1L) {
+        oracle_metadata(context, "post_hdd_verify", length(code_out) - 1L)
+        removable <- tryCatch(
+          oracle(code_out[-i]),
+          minex_oracle_limit_reached = function(e) NA
+        )
+        if (is.na(removable)) {
+          complete <- FALSE
+          break
+        }
+        if (isTRUE(removable)) {
+          code_out <- code_out[-i]   # element now at i is new; do not advance
+        } else {
+          i <- i + 1L
+        }
+      }
+      # Every accepted edit deletes source or a statement. The shared source
+      # cache stays valid across passes, and finite input bounds the fixpoint.
+      if (!complete || identical(code_out, before)) break
     }
   }
 
@@ -377,10 +375,7 @@ minex <- function(file = NULL,
       "First failure: ", evaluation_failures[[1L]]$failure$message,
       call. = FALSE)
   }
-  if (jointly_failed) {
-    warning("Sub-expression reductions did not jointly reproduce the failure; ",
-            "returning the statement-level result.", call. = FALSE)
-  } else if (!complete && !length(evaluation_failures)) {
+  if (!complete && !length(evaluation_failures)) {
     warning("minex stopped early; result reproduces the failure but may still ",
             "be reducible. Re-run with a higher `max_oracle_calls`.",
             call. = FALSE)
