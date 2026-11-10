@@ -125,7 +125,7 @@ test_that("source-set cache keys preserve statement vector boundaries", {
   expect_identical(calls, 2L)
 })
 
-test_that("joint verification and post-HDD sweeps share actual-call accounting", {
+test_that("expression fixed-point passes share actual-call accounting", {
   original <- c("a <- 1", "f(a, bad)")
   reproduces <- function(code) {
     any(grepl("bad", code, fixed = TRUE)) &&
@@ -146,26 +146,37 @@ test_that("joint verification and post-HDD sweeps share actual-call accounting",
     expect_actual_call_trace(result$trace, length(seen))
     if (result$complete) expect_identical(parse(text = result$code)[[1]], quote(f(bad)))
     if (!is.finite(budget)) {
-      expect_true(any(result$trace$phase == "joint_verify"))
       expect_true(any(result$trace$phase == "post_hdd_verify"))
     }
   }
 })
 
-test_that("jointly invalid expression reductions fall back within the same budget", {
+test_that("incompatible expression reductions share the same budget and cache", {
   original <- c("z1 <- 1 |> abs() |> sqrt()", "z2 <- 2 |> abs() |> sqrt()")
   reproduces <- function(code) {
     length(code) == 2L && !all(nchar(code) < nchar(original))
   }
-  seen <- character()
-  oracle <- function(code) { seen <<- c(seen, oracle_key(code)); reproduces(code) }
-  expect_warning(result <- suppressMessages(minex(code = original, oracle = oracle,
-    granularity = "expression", verbose = "trace")), "did not jointly reproduce")
-  expect_identical(result$code, original)
-  expect_false(result$complete)
-  expect_identical(result$oracle_calls, length(seen))
-  expect_false(anyDuplicated(seen) > 0L)
-  expect_actual_call_trace(result$trace, length(seen))
+  for (budget in c(1:15, Inf)) {
+    seen <- character()
+    oracle <- function(code) {
+      seen <<- c(seen, oracle_key(code))
+      reproduces(code)
+    }
+    result <- suppressWarnings(suppressMessages(minex(
+      code = original, oracle = oracle, granularity = "expression",
+      max_oracle_calls = budget, verbose = "trace"
+    )))
+    expect_true(reproduces(result$code))
+    expect_identical(result$oracle_calls, length(seen))
+    expect_lte(length(seen), budget)
+    expect_false(anyDuplicated(seen) > 0L)
+    expect_actual_call_trace(result$trace, length(seen))
+    if (!is.finite(budget)) {
+      expect_true(result$complete)
+      expect_identical(parse(text = result$code[1])[[1]], quote(z1 <- 1))
+      expect_identical(result$code[2], original[2])
+    }
+  }
 })
 
 test_that("automatic escalation shares custom preconditions, budgets, and trace IDs", {

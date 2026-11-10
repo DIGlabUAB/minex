@@ -1,5 +1,10 @@
 # minex (development version)
 
+* Expression and statement reduction now repeat together against the latest
+  confirmed code. Later edits can unlock earlier expression deletions with
+  non-monotone oracles, and incompatible independent reductions no longer
+  discard valid progress. All passes share the existing oracle budget and cache.
+
 * Expression reduction now uses full source positions, including tab expansion,
   Unicode text, and multiline pipelines. Deleting overlapping argument spans
   preserves the surviving arguments and their separators.

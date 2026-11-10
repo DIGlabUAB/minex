@@ -90,7 +90,7 @@ globally across phases and automatic escalation. Cached rows retain the
 current ID; reuse of the initial target can therefore have ID 0. Rows with
 \code{cached = FALSE} and an empty \code{event} correspond to actual evaluations.
 Phases are \code{"truncate"}, \code{"reduce"}, \code{"verify"}, \code{"verify_empty"},
-\code{"joint_verify"}, and \code{"post_hdd_verify"}; events include
+and \code{"post_hdd_verify"}; events include
 \code{"budget_exhausted"} and \code{"parse_rejected"}. For
 \code{granularity = "expression"}, the HDD trace rows additionally carry \code{stmt_index}
 (which statement they reduced) and \code{level} (the HDD tree depth); the
@@ -107,8 +107,11 @@ failure. Calls containing missing argument slots are left intact; nested
 calls with complete argument lists can still be reduced. This pass
 does not reduce every R syntax-tree node. When
 such a reduction makes an earlier statement redundant (for example a value
-dropped from a later call), that statement is swept out, so the result stays
-statement one-minimal.
+dropped from a later call), that statement is swept out. Both passes repeat
+against the latest confirmed code until neither changes, so a later edit
+can unlock an earlier expression even for a non-monotone oracle. A completed
+result is statement one-minimal and admits no single supported expression
+deletion that preserves the oracle; it need not be globally smallest.
 
 When \code{granularity} is left at its default \emph{and} statement-level reduction
 removes nothing, \code{minex()} retries once at \code{"expression"} rather than
