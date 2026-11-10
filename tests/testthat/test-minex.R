@@ -46,12 +46,11 @@ test_that("minex re-sweeps statements made redundant by sub-expression reduction
 
 test_that("minex counts the failure-point truncation probe in oracle_calls", {
   # Failure at statement 1 of 2 -> truncation to [1] fires exactly one real oracle
-  # probe. The reported oracle_calls must include it: 1 probe + 1 ddmin precondition
-  # (a one-statement set needs no further reduction). The one-time target-recording
-  # run is not a predicate evaluation and is not counted.
+  # probe. Its cached result satisfies ddmin's precondition without another run.
+  # The initial target observation is not a predicate evaluation and is excluded.
   res <- minex(code = c("stop('boom')", "y <- 1"), backend = "inprocess")
   expect_equal(res$n_minimal, 1L)
-  expect_equal(res$oracle_calls, 2L)
+  expect_equal(res$oracle_calls, 1L)
 })
 
 test_that("minex reads from a file", {
@@ -138,7 +137,7 @@ test_that("minex warns on multiple input sources (code wins, resolves cleanly)",
 test_that("minex reports incomplete under a tight budget", {
   # Jointly-required, non-adjacent statements force several oracle calls, so a
   # budget of 1 genuinely truncates the search.
-  script <- c("a <- 1", "b <- 2", "c <- 3", "stop('boom')")
+  script <- c("a <- 1", "b <- 2", "c <- 3", "stop(a + c)")
   res <- suppressWarnings(
     minex(code = script, backend = "inprocess", max_oracle_calls = 1L)
   )
@@ -215,9 +214,8 @@ test_that("granularity='expression' pipeline reduction produces the exact expect
 })
 
 test_that("granularity='expression' result always reproduces the target failure (joint-soundness)", {
-  # Guards against the joint-soundness gap: each statement is reduced against
-  # the OTHER statements held at their un-reduced form, so the assembled
-  # code_out must be joint-verified (or fall back) before being returned.
+  # Every statement must be reduced against the latest confirmed whole program,
+  # not independently against the other statements' original forms.
   script <- c("x <- 1:10",
               "result <- x |> rev() |> sqrt() |> log('oops not a base')")
   res <- minex(code = script, granularity = "expression", backend = "inprocess")
@@ -229,38 +227,25 @@ test_that("granularity='expression' result always reproduces the target failure 
   expect_true(isTRUE(matcher(cand, res$target)))
 })
 
-test_that("granularity='expression' falls back to the statement-level result when sub-expression reductions don't jointly reproduce", {
-  # A custom oracle that deterministically returns TRUE for any candidate in
-  # which at most one of the two statements is shorter than its original
-  # (i.e. reproduces per-statement, which is all the inner HDD loop checks,
-  # since the loop always holds the OTHER statement at its unreduced form)
-  # but FALSE once BOTH statements are simultaneously shortened. This
-  # reliably forces the two per-statement reductions to independently
-  # "succeed" while their composition does not -- the exact defect class the
-  # final joint-verify + fallback exists to catch.
+test_that("incompatible expression reductions retain jointly valid progress", {
   orig <- c("z1 <- 1 |> abs() |> sqrt()",
             "z2 <- 2 |> abs() |> sqrt()")
-  fallback_oracle <- function(stmts) {
-    if (length(stmts) != 2) return(FALSE)
-    reduced <- c(nchar(stmts[1]) < nchar(orig[1]),
-                 nchar(stmts[2]) < nchar(orig[2]))
-    !(reduced[1] && reduced[2])
+  reproduces <- function(stmts) {
+    length(stmts) == 2L && !all(nchar(stmts) < nchar(orig))
   }
 
-  expect_warning(
-    res <- minex(code = orig, oracle = fallback_oracle,
-                 granularity = "expression", backend = "inprocess"),
-    "did not jointly reproduce"
-  )
-  expect_identical(res$code, orig)   # fell back to the statement-level form
-  expect_false(res$complete)
+  res <- minex(code = orig, oracle = reproduces,
+               granularity = "expression", backend = "inprocess")
+  expect_true(reproduces(res$code))
+  expect_identical(parse(text = res$code[1])[[1]], quote(z1 <- 1))
+  expect_identical(res$code[2], orig[2])
+  expect_true(res$complete)
 })
 
 test_that("granularity='expression' warns when the HDD phase (not statement-level ddmin) hits budget", {
   # budget=6 lets statement-level ddmin finish (it needs 3 calls here and
   # both statements are jointly required) but truncates the subsequent HDD
-  # pass, so this exercises the budget-limited path distinct from the
-  # non-composition fallback above.
+  # pass, so this exercises the budget-limited expression path.
   script <- c("x <- 1:10",
               "result <- x |> rev() |> sqrt() |> log('oops not a base')")
   res <- suppressWarnings(

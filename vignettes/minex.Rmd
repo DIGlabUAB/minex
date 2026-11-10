@@ -25,8 +25,10 @@ code together with its output. It does nothing about the *minimal* half. That
 part, stripping a script down to the few lines that actually matter, is still
 done by hand, and it is the tedious step.
 
-`minex()` automates it. Give it failing code and it returns the smallest subset
-of statements that still produces the same error.
+`minex()` automates it. Give it failing code and it returns a one-minimal set of
+statements that still produces the same error: no remaining statement can be
+removed individually while preserving the failure. This is not a guarantee of
+the globally smallest possible script.
 
 ## A first example
 
@@ -79,13 +81,20 @@ original. This is usually the right choice: an over-reduced fragment tends to
 fail differently (often "object not found"), and message matching rejects it.
 
 If the message embeds changing details such as a value or an index, match on the
-condition *class* instead:
+condition's specific *class* instead:
 
 ```{r}
 minex(code = script, match = "class", backend = "inprocess")
 ```
 
-Use `match = "both"` to require the message and a shared class.
+Class matching requires a shared specific class, such as `DomainError`.
+The standard `error`, `warning`, `message`, `condition`, `simpleError`,
+`simpleWarning`, and `simpleMessage` classes cannot identify a particular
+failure. If the target has only those generic classes, class matching also
+requires the same message and a compatible generic class when available, so an
+unrelated base R error does not qualify.
+
+Use `match = "both"` to require the message and the same class-matching rule.
 
 ## Minimizing against an arbitrary condition
 
@@ -115,23 +124,61 @@ The result is usually small enough to capture with `dput()`.
 
 ## The algorithm
 
-Both `minex()` and `reduce_rows()` are front ends to `ddmin()`, an
-implementation of the delta debugging algorithm of Zeller and Hildebrandt
-(2002). `ddmin()` works on any collection plus a predicate, so it is reusable on
-its own.
+Both `minex()` and `reduce_rows()` are front ends to `ddmin()`. The default
+strategy adapts Counter-Based Delta Debugging (CDD; Zhang et al., 2025): it uses
+the counter-based block sizing described for CDD, but restarts the round counter
+after each successful reduction. The classic block-halving algorithm of Zeller and
+Hildebrandt (2002) remains available with `algorithm = "ddmin"`. `ddmin()` works
+on any collection plus a predicate, so it is reusable on its own.
 
 ```{r}
 ddmin(strsplit("the quick brown fox", " ")[[1]], function(s) "fox" %in% s)
 ```
 
-It partitions the candidate into blocks, keeps the smallest block (or
-complement) that still reproduces the behavior, and increases the granularity
-until every remaining element is load-bearing. The output is *one-minimal*:
-removing any single element makes the behavior disappear.
+After its main reduction phase, `ddmin()` repeatedly sweeps the remaining
+elements and removes any single element whose deletion preserves the behavior.
+This makes the output *one-minimal*: removing any single element makes the
+behavior disappear. It shares the fixed-point motivation discussed by Vince and
+Kiss (2024), but is not their DDMIN* algorithm, which repeatedly invokes DDMIN.
+
+At the default granularity, `minex()` first works over top-level statements. If
+that pass removes nothing, it automatically retries within the surviving
+statements using a specialized HDD*-style pass based on Hierarchical Delta
+Debugging (Misherghi and Su, 2006). It is not a general reducer over every R
+syntax-tree node: the expression pass currently removes pipeline stages (`|>`
+and `%>%`) and positional call arguments. You can request it directly with
+`granularity = "expression"`, or suppress the automatic retry by explicitly
+passing `granularity = "statement"`.
+
+The statement and expression passes share a source cache and one oracle-call
+budget, including final verification. Cache hits and parse rejects are free.
+Initial target observation is excluded from `oracle_calls`; a failure-point
+truncation probe is counted but exempt from the search budget. When an observed
+source reproduces the target, later passes reuse its result.
 
 ## Limitations
 
-`minex()` targets R-level conditions (errors). Failures that crash the R process
-or hang are not captured as conditions; with the `callr` backend they are simply
-treated as not reproducing the target. Reduction granularity is the top-level
-statement, so it will not reach inside a single large expression.
+`minex()` targets R-level conditions. A backend timeout or process failure is
+reported as an unobserved evaluation rather than evidence that the target is
+absent. An unobserved input raises `minex_evaluation_error`; unobserved candidate
+evaluations retain confirmed progress, set `complete = FALSE`, and appear in
+`evaluation_failures`.
+
+Expression-level reduction is limited to pipeline stages and positional call
+arguments; it does not rewrite arbitrary R syntax. Calls containing missing
+argument slots are left intact, though nested calls with complete argument lists
+can still be reduced.
+
+## References
+
+- Misherghi, G. and Su, Z. (2006). "HDD: Hierarchical Delta Debugging."
+  *ICSE 2006*, 142-151. <https://doi.org/10.1145/1134285.1134307>
+- Vince, D. and Kiss, A. (2024). "Evaluation of the Fixed-Point Iteration of
+  Minimizing Delta Debugging." *Journal of Software: Evolution and Process*,
+  36(10), e2702. <https://doi.org/10.1002/smr.2702>
+- Zeller, A. and Hildebrandt, R. (2002). "Simplifying and Isolating
+  Failure-Inducing Input." *IEEE Transactions on Software Engineering*, 28(2),
+  183-200. <https://doi.org/10.1109/32.988498>
+- Zhang, M., Xu, Z., Tian, Y., Cheng, X. and Sun, C. (2025). "Toward a Better
+  Understanding of Probabilistic Delta Debugging." *ICSE 2025*.
+  <https://doi.org/10.1109/ICSE55347.2025.00117>

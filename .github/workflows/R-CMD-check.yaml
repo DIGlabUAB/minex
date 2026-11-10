@@ -2,9 +2,9 @@
 # Runs R CMD check across the common platform/version matrix.
 on:
   push:
-    branches: [main, master]
+    branches: [develop, main, master]
   pull_request:
-    branches: [main, master]
+    branches: [develop, main, master]
 
 name: R-CMD-check
 

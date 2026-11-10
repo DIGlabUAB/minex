@@ -35,7 +35,7 @@ source emits a warning and the highest-precedence source is used.}
 returning a single logical. When supplied, the target failure is not
 recorded automatically and \code{condition}, \code{match} and failure-point truncation
 are all bypassed; you are fully responsible for defining what counts as
-reproducing the failure.}
+reproducing the failure. Empty candidates are not tested.}
 
 \item{condition}{Which kind of condition to target: \code{"error"} (the default),
 \code{"warning"}, \code{"message"}, or \code{"any"} (the most severe condition present,
@@ -43,7 +43,11 @@ error > warning > message). Ignored when a custom \code{oracle} is supplied.}
 
 \item{match}{How a candidate's failure must match the recorded one when no
 \code{oracle} is given: \code{"message"} (identical message, the default), \code{"class"}
-(shares a condition class) or \code{"both"}. Matching on the message is usually
+(shares a specific condition class) or \code{"both"}. Class matching excludes
+generic classes such as \code{"error"}, \code{"condition"}, and \code{"simpleError"}.
+For targets with only generic classes, it requires the same message and a
+compatible generic class when available. \code{"both"} also requires the same message
+for specific-class targets. Matching on the message is usually
 right, because an over-reduced fragment tends to fail with a different
 message (for example "object not found"). Can also be a function taking
 two condition summaries, \code{candidate} and \code{target} (each a list with
@@ -51,8 +55,8 @@ two condition summaries, \code{candidate} and \code{target} (each a list with
 matching logic.}
 
 \item{algorithm}{The reduction strategy passed to \code{\link[=ddmin]{ddmin()}}: \code{"cdd"}
-(convergent delta debugging, the default) or \code{"ddmin"} (the classic
-block-halving loop).}
+(the default, adapted from Counter-Based Delta Debugging) or \code{"ddmin"} (the
+classic block-halving loop).}
 
 \item{backend}{Either \code{"callr"} (evaluate each candidate in a fresh R process,
 the default and the only choice that fully isolates state) or \code{"inprocess"}
@@ -67,31 +71,47 @@ iteration.}
 
 \item{timeout}{Maximum seconds allowed for a single \code{callr} evaluation.}
 
-\item{max_oracle_calls}{Numeric upper bound on the number of oracle
-evaluations in the reduction search, passed to \code{\link[=ddmin]{ddmin()}} (and to the HDD
-pass when \code{granularity = "expression"}). When the budget is exhausted the
+\item{max_oracle_calls}{Numeric scalar, a whole number at least 1 or \code{Inf}.
+Upper bound on actual oracle evaluations across the whole reduction search,
+including statement reduction, expression reduction, and verification.
+Cache hits and parse rejects do not consume the budget. When it is exhausted the
 reduction stops early with a warning; the result still reproduces the
-failure but may not be one-minimal. The one-time failure-point truncation
-probe is mandatory setup, exempt from this limit, but is still included in
-the reported \code{oracle_calls}. The budget bounds the whole call: when the
+failure but may not be one-minimal. Initial target observation is setup,
+excluded from this budget and from \code{oracle_calls}; its confirmed source is
+reused rather than evaluated again. The one-time failure-point truncation
+probe is also exempt from the budget, but is included in \code{oracle_calls}.
+Thus the reported count can exceed the search budget by one. When the
 statement pass escalates to \code{"expression"} (see \code{granularity}), the second
 pass runs on whatever the first left rather than on a fresh budget.}
 
 \item{verbose}{Logical. If \code{TRUE}, report progress. If \code{"trace"}, also
-populate the result's \code{trace} with a per-oracle-call record. For
+populate the result's \code{trace}. Call IDs count actual predicate evaluations
+globally across phases and automatic escalation. Cached rows retain the
+current ID; reuse of the initial target can therefore have ID 0. Rows with
+\code{cached = FALSE} and an empty \code{event} correspond to actual evaluations.
+Phases are \code{"truncate"}, \code{"reduce"}, \code{"verify"}, \code{"verify_empty"},
+and \code{"post_hdd_verify"}; events include
+\code{"budget_exhausted"} and \code{"parse_rejected"}. For
 \code{granularity = "expression"}, the HDD trace rows additionally carry \code{stmt_index}
 (which statement they reduced) and \code{level} (the HDD tree depth); the
 statement-level rows have \code{NA} in both. For \code{granularity = "statement"}
-the trace is unchanged from 0.2.0 (no \code{stmt_index}/\code{level} columns).}
+the trace has no \code{stmt_index}/\code{level} columns.}
 
 \item{granularity}{\code{"statement"} (the default) reduces only at the level of
 top-level statements. \code{"expression"}
-additionally reduces \emph{within} each surviving statement via HDD (hierarchical
-delta debugging): pipeline stages (\verb{|>}, magrittr \verb{\%>\%}) and positional call
-arguments can be dropped from a statement as long as the whole kept set
-still reproduces the target failure. When such a reduction makes an earlier
-statement redundant (for example a value dropped from a later call), that
-statement is swept out, so the result stays statement one-minimal.
+additionally reduces \emph{within} each surviving statement via a specialized
+HDD*-style pass based on hierarchical delta debugging: pipeline stages
+(\verb{|>}, magrittr \verb{\%>\%}) and positional call arguments can be dropped from a
+statement as long as the whole kept set still reproduces the target
+failure. Calls containing missing argument slots are left intact; nested
+calls with complete argument lists can still be reduced. This pass
+does not reduce every R syntax-tree node. When
+such a reduction makes an earlier statement redundant (for example a value
+dropped from a later call), that statement is swept out. Both passes repeat
+against the latest confirmed code until neither changes, so a later edit
+can unlock an earlier expression even for a non-monotone oracle. A completed
+result is statement one-minimal and admits no single supported expression
+deletion that preserves the oracle; it need not be globally smallest.
 
 When \code{granularity} is left at its default \emph{and} statement-level reduction
 removes nothing, \code{minex()} retries once at \code{"expression"} rather than
@@ -113,16 +133,23 @@ and \code{n_chars_minimal} (\code{nchar()} of the code collapsed to a single str
 before and after reduction), the number of \code{oracle_calls} (every predicate
 evaluation, including the failure-point truncation probe), the recorded
 \code{target} failure (or \code{NULL} for a custom oracle), the \code{granularity} setting
-used, and the \code{match} and \code{backend} settings.
+used, and the \code{match} and \code{backend} settings. \code{complete} is \code{FALSE} when the
+search exhausts its budget or a candidate evaluation cannot be observed.
+\code{evaluation_failures} lists unobserved candidates, each with its \code{code} and
+a \code{failure} containing the backend failure type, message, classes, and
+original condition. Unobserved candidates are retained conservatively;
+they do not establish one-minimality. If the input or a required full-set
+baseline cannot be observed, a \code{minex_evaluation_error} is raised instead,
+with the backend condition available as its \code{parent}.
 
 When the statement pass escalated to \code{"expression"}, the result also carries
 \code{escalated_from = "statement"} and \code{coarse_oracle_calls}, the share of
-\code{oracle_calls} spent on the discarded statement-level pass. Both are absent
+\code{oracle_calls} spent on the initial statement-level pass. Both are absent
 otherwise, so \code{is.null(res$escalated_from)} distinguishes a result that was
 reduced at the granularity asked for from one that had to descend.
 }
 \description{
-Reduces a failing piece of R code to the smallest subset of its top-level
+Reduces a failing piece of R code to a one-minimal subset of its top-level
 statements that still triggers the same failure. The result is a \emph{one-minimal}
 example: removing any remaining statement makes the failure disappear. This is
 the form requested when reporting bugs or asking for help, and the part of
@@ -137,14 +164,16 @@ rather than a subset of them. See \code{granularity}.
 
 By default \code{minex()} first runs the whole input to record the failure it
 produces (its condition message and class), then uses \code{\link[=ddmin]{ddmin()}} to search for
-a minimal subset that reproduces it. Each candidate is evaluated in a separate
-R process so that dependencies between statements and their side effects are
-respected; removing a statement that a later one needs typically changes the
-error, and such a removal is therefore rejected.
+a one-minimal subset that reproduces it. Each candidate is evaluated in a
+separate R process so that dependencies between statements and their side
+effects are respected; removing a statement that a later one needs typically
+changes the error, and such a removal is therefore rejected.
 
 Supply a custom \code{oracle} to minimize against any condition you can express as
 a predicate, rather than against the recorded failure. The oracle receives a
-character vector of statements and must return a single logical.
+character vector of statements and must return a single logical. The empty
+statement set is not considered; a custom oracle should be false for it if
+the one-minimality guarantee is required.
 }
 \examples{
 # A failing script padded with irrelevant setup.
@@ -174,6 +203,20 @@ minex(code = script)
 # Reduce a failing script copied to the system clipboard:
 minex(clipboard = TRUE)
 }
+}
+\references{
+Zhang M, Xu Z, Tian Y, Cheng X, Sun C (2025). "Toward a Better Understanding
+of Probabilistic Delta Debugging." \emph{ICSE 2025}.
+\doi{10.1109/ICSE55347.2025.00117}
+
+Misherghi G, Su Z (2006). "HDD: Hierarchical Delta Debugging." \emph{ICSE 2006},
+142-151. \doi{10.1145/1134285.1134307}
+
+For related work on repeatedly invoking DDMIN to a fixed point, see Vince D,
+Kiss A (2024). "Evaluation of the Fixed-Point Iteration of Minimizing Delta
+Debugging." \emph{Journal of Software: Evolution and Process}, 36(10), e2702.
+\doi{10.1002/smr.2702} The verification sweep used here instead repeatedly
+tests singleton deletions; it is not the paper's DDMIN* algorithm.
 }
 \seealso{
 \code{\link[=ddmin]{ddmin()}} for the underlying algorithm and \code{\link[=reduce_rows]{reduce_rows()}} for

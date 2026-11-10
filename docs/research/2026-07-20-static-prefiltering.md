@@ -2,7 +2,6 @@
 
 Date: 2026-07-20
 Status: **investigated and rejected for v1**
-Tested on: R 4.5.2, `codetools` (base), `CodeDepends` 0.6.7
 
 ## The idea
 
@@ -12,28 +11,13 @@ provably-irrelevant remainder with **zero** oracle calls.
 
 ## Verdict: do not build for v1
 
-Measured yield is too low to justify the code and maintenance surface.
+There is no retained prototype, benchmark corpus, or result set that supports a
+quantitative effectiveness claim. The decision is therefore based only on the
+following conservative design analysis, not on measured yield.
 
-## Why: the measured number
+## Why the expected scope is narrow
 
-A prototype implementing the full conservative algorithm (below) was run against
-a 16-statement synthetic analysis script **deliberately constructed to favour
-the filter** -- containing two `library()` calls, `read.csv`, a real dplyr
-pipeline, several genuinely dead statements, and a failing `stopifnot()`.
-
-**Result: 2 of 16 statements dropped (12.5%).**
-
-Most of the planted dead statements were *not* droppable:
-
-| Statement | Dropped? | Why not |
-|---|---|---|
-| `summary_stats <- summary(raw)` | no | `summary` not in the purity whitelist |
-| `unused_plot <- ggplot(...)` | no | `ggplot` not in the purity whitelist |
-| `noise <- rnorm(...)` | no | RNG is impure -- correctly kept, dropping would shift downstream random state |
-| `cleaned$flag <- ...` | no | complex LHS, kept by construction |
-| `set.seed(1)` | no | bare call, kept by construction |
-
-This generalises. Realistic R analysis scripts are dominated by:
+The proposed filter must conservatively retain:
 
 - `library()` calls -- always kept, and ddmin's own block search removes them
   cheaply anyway
@@ -41,40 +25,24 @@ This generalises. Realistic R analysis scripts are dominated by:
 - calls to third-party plotting/modelling functions whose purity cannot be
   verified -- any assignment through them is stuck
 
-The only statements a *sound* filter reliably removes are simple
-arithmetic/base-function assignments to genuinely unused variables. Real, but
-narrow. Expect **10-25%** on messy exploratory scripts and **~0%** on tight
-pipelines.
+Under the proposed conservative rules, the clearest removable cases are simple
+arithmetic or base-function assignments to genuinely unused variables. No
+preserved evidence currently quantifies how often those cases occur.
 
 ## Why not `CodeDepends`
 
-`CodeDepends` (CRAN, GPL-2|GPL-3, v0.6.7, actively maintained) does exactly this
-analysis via `getInputs()`/`readScript()` and even ships a tree-shaking helper,
-`getDependsThread()`. Disqualified on two independent grounds.
+`CodeDepends` provides related analysis via `getInputs()`/`readScript()` and a
+tree-shaking helper, `getDependsThread()`. It was not adopted for two design
+reasons.
 
-**1. It hard-`Imports` the Bioconductor package `graph`,** which is not on CRAN.
-Installing it required `BiocManager::install("graph")`. For an MIT package whose
-only current dependency is `callr`, adding a Bioconductor-only transitive
-dependency is a large, fragile cost -- CRAN/Bioconductor release-cycle mismatch
-is a common source of `R CMD check` breakage.
+**1. It imports the Bioconductor package `graph`.** For an MIT package whose only
+current dependency is `callr`, adding a Bioconductor transitive dependency would
+substantially increase the installation and maintenance surface.
 
-**2. Its own tree-shaking function is empirically unsound** on all three hazards
-tested. It silently under-approximates rather than erroring:
-
-| Case | `getDependsThread()` returned | Should have included |
-|---|---|---|
-| `x <<- 99` in a function, later `print(x)` | `{4}` | the defining statements |
-| `eval(parse(text = "z <- 10"))`, later `w <- z + 1` | `{3}` | statement 1 |
-| `assign(nm, 5)` with `nm` a variable | `{4}` | statements 1-2 |
-
-In the `eval(parse())` case the signal *exists* in the object (`getInputs()`
-correctly records `functions: eval, parse`) but the pruning function ignores it.
-The `assign()` case emits a `warning()` to stderr, but that warning is **not**
-reflected in the returned `ScriptNodeInfo@sideEffects` field, so a caller
-inspecting structured output alone would never see it.
-
-A mature, purpose-built package gets this wrong on exactly the hazards that
-matter. That is strong evidence the problem is harder than it looks.
+**2. Dynamic evaluation and non-local assignment require explicit validation.**
+Constructs such as `<<-`, `eval(parse())`, and `assign()` can invalidate a
+static dependency approximation. Because no reproducible compatibility tests
+are retained here, the behavior of `CodeDepends` on these cases is not asserted.
 
 ## Tooling notes (if ever revisited)
 
@@ -87,15 +55,6 @@ matter. That is strong evidence the problem is harder than it looks.
   recursive walker matching on `<-`, `=`, `<<-` call heads, descending into
   `if`/`for`/`while`/`{}` but **not** into nested `function(){}` bodies except
   through `<<-`.
-
-Verified walker behaviour:
-
-| Expression | Outer writes |
-|---|---|
-| `if (x > 0) y <- 1 else y <- 2` | `{y}` |
-| `for (i in 1:10) s <- s + i` | `{s}` |
-| `g <- function(a) { a <- a + 1; a }` | `{g}` (local `a` correctly excluded) |
-| `g <- function(a) { z <<- a + 1 }` | `{g, z}` |
 
 ## The algorithm, if revisited
 
@@ -124,11 +83,11 @@ Safe over-approximations (reduce yield, never cause unsound drops): NSE like
 
 Worth recording, because it lowers the risk if this is ever revisited.
 
-`ddmin()` unconditionally tests the full set first (`R/ddmin.R:68-71`) and hard
-`stop()`s if it does not reproduce:
+`ddmin()` unconditionally tests the full set first and stops if it does not
+reproduce:
 
 ```r
-if (!test(seq_len(n_items))) {
+if (!test(seq_len(n_items), exempt = TRUE)) {
   stop("`interesting` is FALSE for the full set; nothing to minimize.", call. = FALSE)
 }
 ```

@@ -32,8 +32,15 @@ print.minex_result <- function(x, ...) {
   }
   if (incomplete) {
     # Keep "may still be reducible" on ONE line so tools/tests can grep it.
-    cat("note: reproduces the failure but may still be reducible;",
-        "re-run with a higher `max_oracle_calls`.\n")
+    if (length(x$evaluation_failures)) {
+      cat("note: reproduces the failure but may still be reducible;",
+          "some candidate evaluations could not be observed.\n")
+      cat("Inspect `evaluation_failures` and retry after resolving the backend",
+          "failure or increasing `timeout`.\n")
+    } else {
+      cat("note: reproduces the failure but may still be reducible;",
+          "re-run with a higher `max_oracle_calls`.\n")
+    }
   }
   if (identical(x$granularity, "expression") && (.stmt_moved || !.char_moved) &&
       !is.null(x$n_chars_original) && !is.null(x$n_chars_minimal)) {
