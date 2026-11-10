@@ -9,7 +9,8 @@ reduce_rows(
   predicate,
   algorithm = c("cdd", "ddmin"),
   max_oracle_calls = Inf,
-  verbose = FALSE
+  verbose = FALSE,
+  .info = NULL
 )
 }
 \arguments{
@@ -25,9 +26,14 @@ of \code{"cdd"} (the default CDD adaptation) or \code{"ddmin"}. Passed through t
 \code{\link[=ddmin]{ddmin()}}.}
 
 \item{max_oracle_calls}{Numeric. An upper bound on the number of predicate
-calls. Passed through to \code{\link[=ddmin]{ddmin()}}.}
+calls, including the full-data precondition test. Passed through to \code{\link[=ddmin]{ddmin()}}.
+Incomplete reductions emit a warning and return the smallest confirmed subset.}
 
-\item{verbose}{Logical. If \code{TRUE}, report progress.}
+\item{verbose}{Logical or character. If \code{TRUE}, report progress; \code{"trace"}
+records a per-call trace in \code{.info}.}
+
+\item{.info}{Optional environment receiving \code{oracle_calls}, \code{complete}, and
+\code{trace}, as in \code{\link[=ddmin]{ddmin()}}. The returned data frame has no added attributes.}
 }
 \value{
 A data frame containing the one-minimal subset of rows.

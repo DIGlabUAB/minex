@@ -43,7 +43,11 @@
 #'   error > warning > message). Ignored when a custom `oracle` is supplied.
 #' @param match How a candidate's failure must match the recorded one when no
 #'   `oracle` is given: `"message"` (identical message, the default), `"class"`
-#'   (shares a condition class) or `"both"`. Matching on the message is usually
+#'   (shares a specific condition class) or `"both"`. Class matching excludes
+#'   generic classes such as `"error"`, `"condition"`, and `"simpleError"`.
+#'   For targets with only generic classes, it requires the same message and a
+#'   compatible generic class when available. `"both"` also requires the same message
+#'   for specific-class targets. Matching on the message is usually
 #'   right, because an over-reduced fragment tends to fail with a different
 #'   message (for example "object not found"). Can also be a function taking
 #'   two condition summaries, `candidate` and `target` (each a list with
@@ -64,13 +68,16 @@
 #'   process and is unaffected; prefer `"inprocess"` only for trusted, quick
 #'   iteration.
 #' @param timeout Maximum seconds allowed for a single `callr` evaluation.
-#' @param max_oracle_calls Numeric upper bound on the number of oracle
-#'   evaluations in the reduction search, passed to [ddmin()] (and to the HDD
-#'   pass when `granularity = "expression"`). When the budget is exhausted the
+#' @param max_oracle_calls Numeric scalar, a whole number at least 1 or `Inf`.
+#'   Upper bound on actual oracle evaluations across the whole reduction search,
+#'   including statement reduction, expression reduction, and verification.
+#'   Cache hits and parse rejects do not consume the budget. When it is exhausted the
 #'   reduction stops early with a warning; the result still reproduces the
-#'   failure but may not be one-minimal. The one-time failure-point truncation
-#'   probe is mandatory setup, exempt from this limit, but is still included in
-#'   the reported `oracle_calls`. The budget bounds the whole call: when the
+#'   failure but may not be one-minimal. Initial target observation is setup,
+#'   excluded from this budget and from `oracle_calls`; its confirmed source is
+#'   reused rather than evaluated again. The one-time failure-point truncation
+#'   probe is also exempt from the budget, but is included in `oracle_calls`.
+#'   Thus the reported count can exceed the search budget by one. When the
 #'   statement pass escalates to `"expression"` (see `granularity`), the second
 #'   pass runs on whatever the first left rather than on a fresh budget.
 #' @param granularity `"statement"` (the default) reduces only at the level of
@@ -79,7 +86,9 @@
 #'   HDD*-style pass based on hierarchical delta debugging: pipeline stages
 #'   (`|>`, magrittr `%>%`) and positional call arguments can be dropped from a
 #'   statement as long as the whole kept set still reproduces the target
-#'   failure. This is not a general reducer over every R syntax-tree node. When
+#'   failure. Calls containing missing argument slots are left intact; nested
+#'   calls with complete argument lists can still be reduced. This pass
+#'   does not reduce every R syntax-tree node. When
 #'   such a reduction makes an earlier statement redundant (for example a value
 #'   dropped from a later call), that statement is swept out, so the result stays
 #'   statement one-minimal.
@@ -96,11 +105,17 @@
 #'   stopped early against `max_oracle_calls`, since it has not then shown that
 #'   nothing is removable.
 #' @param verbose Logical. If `TRUE`, report progress. If `"trace"`, also
-#'   populate the result's `trace` with a per-oracle-call record. For
+#'   populate the result's `trace`. Call IDs count actual predicate evaluations
+#'   globally across phases and automatic escalation. Cached rows retain the
+#'   current ID; reuse of the initial target can therefore have ID 0. Rows with
+#'   `cached = FALSE` and an empty `event` correspond to actual evaluations.
+#'   Phases are `"truncate"`, `"reduce"`, `"verify"`, `"verify_empty"`,
+#'   `"joint_verify"`, and `"post_hdd_verify"`; events include
+#'   `"budget_exhausted"` and `"parse_rejected"`. For
 #'   `granularity = "expression"`, the HDD trace rows additionally carry `stmt_index`
 #'   (which statement they reduced) and `level` (the HDD tree depth); the
 #'   statement-level rows have `NA` in both. For `granularity = "statement"`
-#'   the trace is unchanged from 0.2.0 (no `stmt_index`/`level` columns).
+#'   the trace has no `stmt_index`/`level` columns.
 #'
 #' @return An object of class `"minex_result"`: a list with the minimized `code`
 #'   (a character vector of statements), the `original` statements, the statement
@@ -109,11 +124,18 @@
 #'   before and after reduction), the number of `oracle_calls` (every predicate
 #'   evaluation, including the failure-point truncation probe), the recorded
 #'   `target` failure (or `NULL` for a custom oracle), the `granularity` setting
-#'   used, and the `match` and `backend` settings.
+#'   used, and the `match` and `backend` settings. `complete` is `FALSE` when the
+#'   search exhausts its budget or a candidate evaluation cannot be observed.
+#'   `evaluation_failures` lists unobserved candidates, each with its `code` and
+#'   a `failure` containing the backend failure type, message, classes, and
+#'   original condition. Unobserved candidates are retained conservatively;
+#'   they do not establish one-minimality. If the input or a required full-set
+#'   baseline cannot be observed, a `minex_evaluation_error` is raised instead,
+#'   with the backend condition available as its `parent`.
 #'
 #'   When the statement pass escalated to `"expression"`, the result also carries
 #'   `escalated_from = "statement"` and `coarse_oracle_calls`, the share of
-#'   `oracle_calls` spent on the discarded statement-level pass. Both are absent
+#'   `oracle_calls` spent on the initial statement-level pass. Both are absent
 #'   otherwise, so `is.null(res$escalated_from)` distinguishes a result that was
 #'   reduced at the granularity asked for from one that had to descend.
 #'
@@ -179,14 +201,10 @@ minex <- function(file = NULL,
   if (!is.function(match)) match <- match.arg(match)
   algorithm <- match.arg(algorithm)
   backend   <- match.arg(backend)
+  validate_oracle_budget(max_oracle_calls)
   # Recorded before match.arg() overwrites the argument, so an explicitly
   # requested granularity is never silently overridden.
   .auto_escalate <- missing(granularity)
-  # The caller's oracle, captured before the default one is constructed
-  # below. A re-run must not inherit the generated closure: `target` is only
-  # computed when `oracle` is NULL, and the generated closure also captures
-  # the coarse pass's context.
-  .user_oracle <- oracle
   granularity <- match.arg(granularity)
 
   # Input precedence: code > clipboard > file; warn on multi-source.
@@ -215,10 +233,15 @@ minex <- function(file = NULL,
   statements_full <- statements   # pre-truncation, for honest `original`/`n_original`
 
   target <- NULL
-  oracle_calls_probe <- 0L   # the failure-point truncation probe, if it runs
+  evaluation_failures <- list() # unobserved candidates are not negative evidence
+  context <- new_oracle_context(max_oracle_calls, verbose)
+  context$owner <- "minex"
   if (is.null(oracle)) {
     matcher <- build_matcher(match)
     full <- run_code(statements, backend = backend, timeout = timeout)
+    if (!isTRUE(full$observed)) {
+      stop_unobserved_evaluation(full, backend, "input")
+    }
     # Choose the target condition, then its defining statement index.
     target_cond <- pick_target_condition(full$conditions, condition)
     if (is.null(target_cond)) {
@@ -229,64 +252,82 @@ minex <- function(file = NULL,
     idx <- pick_target_index(full$conditions, target_cond, matcher, condition)
     target <- list(message = target_cond$message, classes = target_cond$classes,
                    conditions = full$conditions, failing_index = idx)
-    oracle <- function(stmts) {
+    oracle <- oracle_wrap(function(stmts) {
       result <- run_code(stmts, backend = backend, timeout = timeout)
+      if (!isTRUE(result$observed)) {
+        # Without an observed baseline the reducer cannot even confirm its
+        # precondition. Other unknown candidates leave confirmed progress intact.
+        if (identical(stmts, statements)) {
+          stop_unobserved_evaluation(result, backend, "full-set baseline")
+        }
+        evaluation_failures[[length(evaluation_failures) + 1L]] <<-
+          list(code = stmts, failure = result$failure)
+        return(FALSE)
+      }
       cand <- pick_target_condition(result$conditions, condition)
       if (is.null(cand)) return(FALSE)
       isTRUE(matcher(cand, target_cond))
+    }, context)
+    if (isTRUE(matcher(target_cond, target_cond))) {
+      assign(oracle_key(statements), TRUE, envir = context$cache)
     }
     # Free failure-point truncation, with a fallback for flaky scripts: only
     # keep the truncated set if it still reproduces (spec section 2). This is one
-    # real oracle evaluation: it is counted in the reported oracle_calls but, like
-    # ddmin's precondition, is mandatory setup and exempt from max_oracle_calls.
+    # real oracle evaluation: counted in oracle_calls but exempt from the search
+    # budget. Its result is cached for the following precondition and search.
     if (!is.na(idx)) {
       truncated <- truncate_statements(statements, idx)
       if (length(truncated) < length(statements)) {
-        oracle_calls_probe <- 1L
-        if (isTRUE(oracle(truncated))) {
+        oracle_metadata(context, "truncate", length(truncated))
+        if (isTRUE(oracle(truncated, .exempt = TRUE))) {
           statements <- truncated
         }
       }
     }
   } else if (!is.function(oracle)) {
     stop("`oracle` must be a function.", call. = FALSE)
+  } else {
+    oracle <- oracle_wrap(oracle, context)
   }
 
   info <- new.env()
-  minimal <- ddmin(statements, function(s) isTRUE(oracle(s)),
+  oracle_metadata(context, "reduce", length(statements))
+  minimal <- ddmin(statements, oracle,
                    algorithm = algorithm, max_oracle_calls = max_oracle_calls,
                    verbose = verbose, .info = info)
 
   code_out <- minimal
-  running  <- (info$oracle_calls %||% 0L) + oracle_calls_probe  # shared counter (probe + stmt-level + HDD)
   complete <- isTRUE(info$complete)
   jointly_failed <- FALSE                    # per-statement reductions didn't compose
-  hdd_trace_parts <- list()                  # per-statement HDD traces, tagged with stmt_index
+  escalated <- FALSE
+  coarse_calls <- NULL
+  # Descend within the same context: keep the original target, confirmed source
+  # configurations, diagnostics, budget, and trace from the statement pass.
+  if (.auto_escalate && granularity == "statement" && complete &&
+      !length(evaluation_failures) &&
+      length(minimal) >= length(statements_full) &&
+      context$budget_calls < context$max_calls) {
+    granularity <- "expression"
+    escalated <- TRUE
+    coarse_calls <- context$calls
+  }
   if (granularity == "expression") {
     for (i in seq_along(minimal)) {
       # reproduce(cand_text): replace statement i with the candidate, run the
       # whole kept set through the existing oracle (run_code + matcher).
-      reproduces <- local({
+      reproduces <- oracle_inherit(local({
         idx_i <- i
         function(cand_text) {
           cand_set <- minimal
           cand_set[idx_i] <- cand_text
           isTRUE(oracle(cand_set))
         }
-      })
-      hoc <- hdd_make_oracle(reproduces)     # source-string memo (Task 6)
+      }), context)
       sub <- new.env()
-      remaining <- if (is.finite(max_oracle_calls)) max_oracle_calls - running else Inf
-      if (is.finite(remaining) && remaining < 1) { complete <- FALSE; break }
-      code_out[i] <- hdd_star(minimal[i], hoc, max_oracle_calls = remaining, info = sub,
+      oracle_metadata(context, "reduce", length(minimal), stmt_index = i)
+      code_out[i] <- hdd_star(minimal[i], reproduces, info = sub,
                               verbose = verbose)
-      running <- running + (sub$oracle_calls %||% 0L)
       if (!isTRUE(sub$complete)) complete <- FALSE
-      if (wants_trace(verbose) && !is.null(sub$trace)) {
-        tagged <- sub$trace
-        tagged$stmt_index <- i
-        hdd_trace_parts[[length(hdd_trace_parts) + 1L]] <- tagged
-      }
     }
 
     # Each statement was reduced against the OTHERS held at their un-reduced
@@ -295,86 +336,67 @@ minex <- function(file = NULL,
     # `code_out` before trusting it; fall back to the known-good `minimal`
     # when the composition doesn't hold or can't be confirmed.
     if (!identical(code_out, minimal)) {
-      remaining <- if (is.finite(max_oracle_calls)) max_oracle_calls - running else Inf
-      if (is.finite(remaining) && remaining < 1) {
-        # Can't afford the verify call: unconfirmed, so don't trust code_out.
+      oracle_metadata(context, "joint_verify", length(code_out))
+      unknown_before <- length(evaluation_failures)
+      joint <- tryCatch(oracle(code_out), minex_oracle_limit_reached = function(e) NA)
+      if (!isTRUE(joint)) {
         code_out <- minimal
+        jointly_failed <- !is.na(joint) && length(evaluation_failures) == unknown_before
         complete <- FALSE
       } else {
-        running <- running + 1L
-        if (!isTRUE(oracle(code_out))) {
-          code_out <- minimal
-          jointly_failed <- TRUE
-          complete <- FALSE
-        } else {
-          # code_out is confirmed to reproduce. A statement HDD stripped down
-          # (e.g. an argument dropped from a later call) can now be redundant, so
-          # the statement set may no longer be one-minimal. Re-sweep to a
-          # fixpoint: drop any statement whose removal still reproduces. Sound --
-          # each drop is oracle-confirmed first; the calls are budgeted exactly
-          # like the joint-verify above.
-          repeat {
-            removed_any <- FALSE
-            i <- 1L
-            while (i <= length(code_out) && length(code_out) > 1L) {
-              remaining <- if (is.finite(max_oracle_calls)) max_oracle_calls - running else Inf
-              if (is.finite(remaining) && remaining < 1) { complete <- FALSE; break }
-              running <- running + 1L
-              if (isTRUE(oracle(code_out[-i]))) {
-                code_out <- code_out[-i]   # element now at i is new; do not advance
-                removed_any <- TRUE
-              } else {
-                i <- i + 1L
-              }
+        # HDD can make earlier statements redundant. Re-sweep to a fixpoint,
+        # sharing the same source cache, budget, and confirmation guarantees.
+        repeat {
+          removed_any <- FALSE
+          i <- 1L
+          while (i <= length(code_out) && length(code_out) > 1L) {
+            oracle_metadata(context, "post_hdd_verify", length(code_out) - 1L)
+            removable <- tryCatch(oracle(code_out[-i]),
+              minex_oracle_limit_reached = function(e) NA)
+            if (is.na(removable)) { complete <- FALSE; break }
+            if (isTRUE(removable)) {
+              code_out <- code_out[-i]   # element now at i is new; do not advance
+              removed_any <- TRUE
+            } else {
+              i <- i + 1L
             }
-            remaining <- if (is.finite(max_oracle_calls)) max_oracle_calls - running else Inf
-            if (!removed_any || (is.finite(remaining) && remaining < 1)) break
           }
+          if (!removed_any || is.na(removable)) break
         }
       }
     }
   }
 
+  if (length(evaluation_failures)) {
+    complete <- FALSE
+    warning(sprintf(
+      "%d candidate evaluation(s) could not be observed; returning confirmed code, ",
+      length(evaluation_failures)),
+      "but the result may still be reducible. Inspect `evaluation_failures` ",
+      "and retry after resolving the backend failure or increasing `timeout`. ",
+      "First failure: ", evaluation_failures[[1L]]$failure$message,
+      call. = FALSE)
+  }
   if (jointly_failed) {
     warning("Sub-expression reductions did not jointly reproduce the failure; ",
             "returning the statement-level result.", call. = FALSE)
-  } else if (!complete) {
+  } else if (!complete && !length(evaluation_failures)) {
     warning("minex stopped early; result reproduces the failure but may still ",
             "be reducible. Re-run with a higher `max_oracle_calls`.",
             call. = FALSE)
   }
 
-  # Trace assembly. Statement-granularity (or non-"trace" verbose) keeps the
-  # `call,phase,size,kept,cached,event` shape byte-for-byte (L14): only when
-  # HDD actually ran under verbose = "trace" do stmt_index/level get added.
-  if (granularity == "expression" && wants_trace(verbose)) {
-    stmt_trace <- info$trace
-    if (!is.null(stmt_trace)) {
-      stmt_trace$stmt_index <- NA_integer_
-      stmt_trace$level <- NA_integer_
-    }
-    hdd_trace <- if (length(hdd_trace_parts) == 0L) {
-      NULL
-    } else {
-      do.call(rbind, hdd_trace_parts)
-    }
-    trace_cols <- c("call", "phase", "size", "kept", "cached", "event",
-                    "stmt_index", "level")
-    trace_pieces <- Filter(Negate(is.null), list(stmt_trace, hdd_trace))
-    trace_out <- if (length(trace_pieces) == 0L) {
-      NULL
-    } else {
-      do.call(rbind, lapply(trace_pieces, `[`, trace_cols))
-    }
-  } else {
-    trace_out <- info$trace
+  trace_out <- build_trace(context$rows)
+  if (granularity == "statement" && !is.null(trace_out)) {
+    trace_out <- trace_out[c("call", "phase", "size", "kept", "cached", "event")]
   }
 
   .result <- structure(
     list(code = code_out, original = statements_full,
          n_original = length(statements_full), n_minimal = length(code_out),
-         oracle_calls = running, target = target, match = match,
+         oracle_calls = context$calls, target = target, match = match,
          backend = backend, complete = complete, algorithm = algorithm,
+         evaluation_failures = evaluation_failures,
          condition = condition, max_oracle_calls = max_oracle_calls,
          trace = trace_out, granularity = granularity,
          n_chars_original = nchar(paste(statements_full, collapse = "\n")),
@@ -382,36 +404,9 @@ minex <- function(file = NULL,
     class = "minex_result"
   )
 
-  # Statement-level bisection cannot reach a failure nested inside a
-  # function body. When the coarse pass removes nothing and the caller did
-  # not ask for a specific granularity, descend rather than return a null
-  # result. The recursive call passes granularity explicitly, so it cannot
-  # escalate again.
-  #
-  # `max_oracle_calls` bounds the call, not the pass, so the fine pass runs
-  # on what the coarse one left. Charging the whole coarse count (including
-  # its exempt truncation probe) errs toward spending less than the bound.
-  budget_left <- if (is.finite(max_oracle_calls)) {
-    max_oracle_calls - .result$oracle_calls
-  } else {
-    Inf
-  }
-  # A coarse pass that removed nothing because it ran out of calls has not
-  # established that nothing is removable, so it is not grounds to descend.
-  if (isTRUE(.auto_escalate) && identical(granularity, "statement") &&
-      isTRUE(.result$complete) && .result$n_minimal >= .result$n_original &&
-      budget_left >= 1) {
-    .fine <- minex(code = code, oracle = .user_oracle, condition = condition,
-                   match = match, algorithm = algorithm, backend = backend,
-                   timeout = timeout, max_oracle_calls = budget_left,
-                   verbose = verbose, granularity = "expression")
-    .fine$escalated_from <- "statement"
-    .fine$coarse_oracle_calls <- .result$oracle_calls
-    # Report what the call cost, not what the surviving pass cost, and the
-    # bound the caller actually set rather than the remainder handed down.
-    .fine$oracle_calls <- .fine$oracle_calls + .result$oracle_calls
-    .fine$max_oracle_calls <- max_oracle_calls
-    return(.fine)
+  if (escalated) {
+    .result$escalated_from <- "statement"
+    .result$coarse_oracle_calls <- coarse_calls
   }
   .result
 }
