@@ -148,3 +148,83 @@ test_that("benchmark Git provenance tolerates missing Git or checkout metadata",
   expect_identical(helper$benchmark_git_provenance(root, git = no_status),
                    list(git_revision = "fixture-head", git_dirty = NA))
 })
+
+test_that("benchmark CLI saves every outcome before choosing its exit status", {
+  benchmark_helpers()
+  skip_if_not_installed("pkgload")
+  skip_if_not_installed("callr")
+  root <- testthat::test_path("..", "..")
+  directory <- tempfile("minex-benchmark-cli-")
+  dir.create(directory)
+  on.exit(unlink(directory, recursive = TRUE), add = TRUE)
+  dir.create(file.path(directory, "R"))
+  dir.create(file.path(directory, "bench", "scripts"), recursive = TRUE)
+  expect_true(all(file.copy(file.path(root, "bench", c("benchmark.R", "run-benchmark.R")),
+                            file.path(directory, "bench"))))
+
+  # A tiny source package supplies deterministic reducer outcomes while the
+  # actual CLI, package loading, case enumeration, and CSV writing run in Rscript.
+  writeLines(c("Package: minexbenchfixture", "Version: 0.0.0",
+               "Title: Benchmark CLI Test Fixture",
+               "Description: Supplies deterministic reducer outcomes for tests.",
+               "License: MIT"), file.path(directory, "DESCRIPTION"))
+  writeLines("export(minex)", file.path(directory, "NAMESPACE"))
+  writeLines(c(
+    "minex <- function(code, condition, algorithm, backend, granularity) {",
+    "  if (code[[1L]] == 'error') stop('fixture, error\\nwith details')",
+    "  incomplete <- code[[1L]] == 'incomplete'",
+    "  if (incomplete) warning('fixture budget exhausted', call. = FALSE)",
+    "  list(complete = !incomplete, oracle_calls = 7L, n_original = 2L,",
+    "       n_minimal = 1L, n_chars_original = 20L, n_chars_minimal = 8L,",
+    "       evaluation_failures = if (incomplete) list('unobserved') else list())",
+    "}"
+  ), file.path(directory, "R", "minex.R"))
+  output <- file.path(directory, "saved results", "benchmark.csv")
+  run <- function(args) callr::rscript(
+    file.path("bench", "run-benchmark.R"), cmdargs = args, wd = directory,
+    stdout = "|", stderr = "|", show = FALSE, user_profile = FALSE,
+    fail_on_status = FALSE, timeout = 60
+  )
+  args <- c("--backend", "inprocess", "--output", output)
+
+  writeLines("success", file.path(directory, "bench", "scripts", "ok.R"))
+  success <- run(args)
+  expect_equal(success$status, 0L, info = success$stderr)
+  saved <- utils::read.csv(output, na.strings = "", stringsAsFactors = FALSE)
+  expect_equal(nrow(saved), 4L)
+  expect_true(all(saved$status == "success"))
+  expect_true(all(saved$package_version == "0.0.0"))
+  expect_true(all(saved$backend == "inprocess"))
+
+  writeLines("incomplete", file.path(directory, "bench", "scripts", "budget.R"))
+  incomplete <- run(args)
+  expect_equal(incomplete$status, 1L, info = incomplete$stderr)
+  saved <- utils::read.csv(output, na.strings = "", stringsAsFactors = FALSE)
+  expect_equal(table(saved$status), c(incomplete = 4L, success = 4L), ignore_attr = TRUE)
+  expect_true(all(saved$warning_messages[saved$status == "incomplete"] ==
+                    "fixture budget exhausted"))
+  expect_true(all(saved$evaluation_failures[saved$status == "incomplete"] == 1L))
+
+  writeLines("error", file.path(directory, "bench", "scripts", "failed.R"))
+  failed <- run(args)
+  expect_equal(failed$status, 1L, info = failed$stderr)
+  saved <- utils::read.csv(output, na.strings = "", stringsAsFactors = FALSE)
+  expect_equal(table(saved$status), c(error = 4L, incomplete = 4L, success = 4L),
+               ignore_attr = TRUE)
+  expect_true(all(saved$error_message[saved$status == "error"] ==
+                    "fixture, error\nwith details"))
+  expect_true(all(is.na(saved$n_minimal[saved$status == "error"])))
+
+  # Help must work without loading a source package, and invalid options must
+  # fail before touching the requested output.
+  unlink(file.path(directory, "DESCRIPTION"))
+  help <- run("--help")
+  expect_equal(help$status, 0L, info = help$stderr)
+  expect_match(help$stdout, "Usage: Rscript bench/run-benchmark.R", fixed = TRUE)
+  invalid_output <- file.path(directory, "invalid.csv")
+  invalid <- run(c("--backend=invalid", "--output", invalid_output))
+  expect_equal(invalid$status, 1L)
+  expect_match(paste(invalid$stdout, invalid$stderr, collapse = "\n"),
+               "`--backend` must be callr or inprocess.", fixed = TRUE)
+  expect_false(file.exists(invalid_output))
+})
