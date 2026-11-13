@@ -9,14 +9,42 @@ Run from the package root:
 Rscript bench/run-benchmark.R
 ```
 
-It runs each script in `scripts/` under both `algorithm = "cdd"` and
-`"ddmin"` and tabulates oracle-call count and result size (`n_minimal`).
+Install the development dependency `pkgload` first. The harness loads the
+package source and runs each script in `scripts/` under both
+`algorithm = "cdd"` and `"ddmin"`, at statement and expression granularity,
+using the isolated `callr` backend. This produces 24 cases for the current corpus.
 
-Purpose: decide whether `algorithm = "cdd"` should be the default. Only prefer
-`"cdd"` if it is at least as good as `"ddmin"` on **both** oracle-call count and
-output size across the corpus; otherwise the default stays `"ddmin"`. The
-harness prints results but does not preserve them, so this directory is a small
-regression/decision corpus, not evidence for a package-wide performance claim.
+Every case is printed and saved to a timestamped CSV in the ignored
+`bench/results/` directory, including cases that fail. To choose a destination:
+
+```sh
+Rscript bench/run-benchmark.R --output /tmp/minex-benchmark.csv
+```
+
+The CSV records the script, algorithm, granularity, condition, backend, status
+(`success`, `incomplete`, or `error`), elapsed seconds, completion flag, oracle
+calls, original and reduced statement and character counts, unobserved candidate
+evaluation count, error message and classes, and warning messages. Failed cases
+have empty result metrics rather than disappearing from the table. Each row also
+records the source package version, Git revision and whether the checkout has
+uncommitted changes, R version, platform, and UTC run timestamp. Git fields are
+empty if Git or checkout metadata is unavailable.
+The command saves the complete table before exiting nonzero if any case fails or
+returns an incomplete reduction.
+
+Use `--backend inprocess` for a faster local diagnostic run. Record and compare
+runs with the same backend, corpus, R version, and machine; elapsed times include
+script loading and are affected by process startup and local system load.
+
+Purpose: compare `"cdd"` (the current default) with `"ddmin"` and guide future
+default decisions using oracle-call count and output size across the corpus. The
+harness preserves results so failures and incomplete reductions remain visible.
+This directory is a small regression/decision corpus, not evidence for a
+package-wide performance claim. Inspect completion and failure status before
+comparing the metrics.
+
+The CI workflow runs the benchmark helper tests directly from the checkout,
+because `bench/` is excluded from the package built for `R CMD check`.
 
 ## Scripts
 
