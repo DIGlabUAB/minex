@@ -1,27 +1,21 @@
-# bench/run-benchmark.R
-# Run from the package root: Rscript bench/run-benchmark.R
-suppressMessages(devtools::load_all("."))
-scripts <- list.files("bench/scripts", full.names = TRUE)
-granularities <- c("statement", "expression")
-rows <- list()
-for (path in scripts) {
-  code <- readLines(path, warn = FALSE)
-  cond <- if (grepl("warning", path)) "warning" else "error"
-  for (algo in c("cdd", "ddmin")) {
-    for (gran in granularities) {
-      res <- tryCatch(
-        minex(code = code, condition = cond, algorithm = algo,
-              backend = "callr", granularity = gran),
-        error = function(e) NULL
-      )
-      if (!is.null(res)) {
-        rows[[length(rows) + 1L]] <- data.frame(
-          script = basename(path), algorithm = algo, granularity = gran,
-          oracle_calls = res$oracle_calls, n_minimal = res$n_minimal,
-          n_chars_minimal = res$n_chars_minimal
-        )
-      }
-    }
-  }
+# Run from the package root: Rscript bench/run-benchmark.R [--output PATH]
+source("bench/benchmark.R")
+args <- commandArgs(trailingOnly = TRUE)
+if (any(args %in% c("--help", "-h"))) {
+  cat("Usage: Rscript bench/run-benchmark.R [--output PATH] [--backend callr|inprocess]\n",
+      "Defaults: timestamped CSV in bench/results; isolated callr backend.\n",
+      "Exits nonzero after saving results if any case fails or is incomplete.\n",
+      sep = "")
+  quit(status = 0L)
 }
-print(do.call(rbind, rows))
+options <- benchmark_options(args)
+if (!requireNamespace("pkgload", quietly = TRUE)) {
+  stop("Install pkgload to benchmark the package source.", call. = FALSE)
+}
+suppressMessages(pkgload::load_all(".", quiet = TRUE))
+scripts <- list.files("bench/scripts", pattern = "\\.R$", full.names = TRUE)
+results <- benchmark_scripts(scripts, reducer = minex, backend = options$backend)
+write_benchmark_results(results, options$output)
+print(results)
+message("Results written to ", normalizePath(options$output, mustWork = TRUE))
+if (any(results$status != "success")) quit(status = 1L)
